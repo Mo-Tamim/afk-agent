@@ -1,0 +1,192 @@
+/* AFK dashboard — minimal, fast, dark by default. */
+
+:root {
+  --bg: #0e1116;
+  --bg-2: #161b22;
+  --bg-3: #1f242c;
+  --fg: #e6edf3;
+  --fg-muted: #8b949e;
+  --border: #30363d;
+  --accent: #58a6ff;
+  --green: #3fb950;
+  --yellow: #d29922;
+  --red: #f85149;
+  --blue: #58a6ff;
+  --purple: #bc8cff;
+  --gray: #6e7681;
+  --running: #58a6ff;
+  --done: #3fb950;
+  --pending: #6e7681;
+  --blocked: #f85149;
+  --no-changes: #d29922;
+  --mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-2: #f6f8fa;
+  --bg-3: #eaeef2;
+  --fg: #1f2328;
+  --fg-muted: #59636e;
+  --border: #d0d7de;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: var(--bg); color: var(--fg);
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.topbar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 10;
+}
+.brand { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gray); display: inline-block; }
+.brand .dot.alive { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.brand .dot.dead { background: var(--red); }
+.topbar .meta { flex: 1; display: flex; gap: 8px; }
+.topbar .controls { display: flex; align-items: center; gap: 10px; }
+.topbar .sep { color: var(--border); }
+
+.muted { color: var(--fg-muted); }
+.small { font-size: 11px; }
+
+button, select {
+  background: var(--bg-3);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+button:hover, select:hover { border-color: var(--fg-muted); }
+
+.layout {
+  display: grid;
+  grid-template-columns: 280px minmax(420px, 1fr) minmax(460px, 1fr);
+  gap: 12px;
+  padding: 12px;
+  height: calc(100vh - 49px);
+  overflow: hidden;
+}
+
+.col { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
+.col-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; }
+.col-head h2 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-muted); }
+
+.panel {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.panel h2 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-muted); }
+
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-family: var(--mono); font-size: 12px; }
+.kv .k { color: var(--fg-muted); }
+.kv .v { word-break: break-all; text-align: right; }
+
+.issues { display: flex; flex-direction: column; gap: 10px; }
+
+.issue {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+.issue.is-running { border-color: var(--running); }
+.issue.is-blocked { border-color: var(--blocked); }
+.issue.is-done    { opacity: 0.7; }
+
+.issue-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.issue-head .id { font-family: var(--mono); color: var(--accent); font-weight: 600; }
+.issue-head .title { font-weight: 600; }
+.issue-head .branch { font-family: var(--mono); font-size: 11px; color: var(--fg-muted); background: var(--bg-3); padding: 2px 6px; border-radius: 4px; }
+.issue-head .ci { font-family: var(--mono); font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid; }
+.ci.GREEN   { color: var(--green);  border-color: var(--green); }
+.ci.RED     { color: var(--red);    border-color: var(--red); }
+.ci.PENDING { color: var(--yellow); border-color: var(--yellow); }
+.ci.NONE,
+.ci.UNKNOWN { color: var(--fg-muted); border-color: var(--border); }
+
+.issue-head .spacer { flex: 1; }
+
+.pipeline { display: flex; gap: 4px; align-items: stretch; flex-wrap: wrap; }
+.phase {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 8px; border-radius: 4px;
+  font-family: var(--mono); font-size: 11px;
+  background: var(--bg-3); color: var(--fg-muted);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.phase:hover { color: var(--fg); }
+.phase.completed { color: var(--done); border-color: var(--done); background: rgba(63,185,80,0.08); }
+.phase.running   { color: var(--running); border-color: var(--running); background: rgba(88,166,255,0.12); animation: pulse 1.6s infinite; }
+.phase.pending   { color: var(--pending); }
+.phase.outcome-BLOCKED   { color: var(--blocked); border-color: var(--blocked); }
+.phase.outcome-NO_CHANGES { color: var(--no-changes); border-color: var(--no-changes); }
+.phase .arrow { color: var(--border); }
+.phase .dur { color: var(--fg-muted); }
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(88,166,255,0.4); }
+  50%      { box-shadow: 0 0 0 4px rgba(88,166,255,0); }
+}
+
+.history {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--fg-muted);
+  display: none;
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+}
+.issue.open .history { display: block; }
+.history .row { display: grid; grid-template-columns: auto 90px 90px 1fr; gap: 8px; padding: 2px 0; }
+.history .row .outcome { font-weight: 600; }
+.history .row .outcome.COMPLETE { color: var(--done); }
+.history .row .outcome.BLOCKED { color: var(--blocked); }
+.history .row .outcome.NO_CHANGES { color: var(--no-changes); }
+
+.worktree, .pr {
+  font-family: var(--mono); font-size: 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.worktree:last-child, .pr:last-child { border: 0; }
+.worktree .branch, .pr .branch { color: var(--accent); }
+.pr a { color: var(--accent); text-decoration: none; }
+.pr a:hover { text-decoration: underline; }
+
+.logbox {
+  flex: 1;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: pre;
+  overflow: auto;
+  min-height: 200px;
+  max-height: 100%;
+}
+.logbox.small { font-size: 11px; max-height: 220px; min-height: 120px; }
+
+.col-right .controls { display: flex; gap: 6px; }
+.col-right select { max-width: 180px; }
+
+@media (max-width: 1200px) {
+  .layout { grid-template-columns: 1fr; height: auto; overflow: visible; }
+  .col { overflow: visible; }
+  .logbox { max-height: 380px; }
+}

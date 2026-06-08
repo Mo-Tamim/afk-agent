@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AFK · live dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='28'%3E%E2%9A%99%EF%B8%8F%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot" id="orch-dot"></span>
+      <strong>AFK</strong>
+      <span class="muted" id="orch-status">connecting…</span>
+    </div>
+    <div class="meta">
+      <span id="repo-name" class="muted"></span>
+      <span class="sep">·</span>
+      <span id="prd-info" class="muted"></span>
+    </div>
+    <div class="controls">
+      <label class="muted small">refresh
+        <select id="refresh-rate">
+          <option value="1000">1s</option>
+          <option value="2000" selected>2s</option>
+          <option value="5000">5s</option>
+          <option value="15000">15s</option>
+          <option value="0">off</option>
+        </select>
+      </label>
+      <button id="theme-toggle" title="Toggle theme">◐</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="col col-left">
+      <section class="panel">
+        <h2>Orchestrator</h2>
+        <div id="orch-panel" class="kv"></div>
+      </section>
+      <section class="panel">
+        <h2>Worktrees</h2>
+        <div id="worktrees"></div>
+      </section>
+      <section class="panel">
+        <h2>Pull requests</h2>
+        <div id="prs"></div>
+      </section>
+    </aside>
+
+    <section class="col col-mid">
+      <div class="col-head">
+        <h2>Issues</h2>
+        <span class="muted small" id="issue-count"></span>
+      </div>
+      <div id="issues" class="issues"></div>
+    </section>
+
+    <aside class="col col-right">
+      <div class="col-head">
+        <h2>Live log</h2>
+        <div class="controls">
+          <select id="log-issue"></select>
+          <select id="log-phase"></select>
+          <select id="log-tail">
+            <option>100</option><option selected>300</option><option>1000</option><option>3000</option>
+          </select>
+          <button id="log-pause" title="Pause auto-scroll">⏸</button>
+        </div>
+      </div>
+      <pre id="log-view" class="logbox">(select an issue)</pre>
+      <div class="col-head">
+        <h2>Orchestrator log</h2>
+      </div>
+      <pre id="orch-log" class="logbox small">…</pre>
+    </aside>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

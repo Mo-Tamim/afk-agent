@@ -184,6 +184,11 @@ if [[ "$SCOPE" == "global" ]]; then
   mkdir -p "$GLOBAL_HOME"
   cp -R "$TEMPLATE_DIR/scripts" "$GLOBAL_HOME/"
   chmod +x "$GLOBAL_HOME/scripts/afk" "$GLOBAL_HOME/scripts"/*.sh
+  # Dashboard ships next to scripts so afk-dashboard.sh resolves to it.
+  if [[ -d "$TEMPLATE_DIR/dashboard" ]]; then
+    rm -rf "$GLOBAL_HOME/dashboard"
+    cp -R "$TEMPLATE_DIR/dashboard" "$GLOBAL_HOME/"
+  fi
   mkdir -p "$GLOBAL_HOME/bin"
   ln -sf "$GLOBAL_HOME/scripts/afk" "$GLOBAL_HOME/bin/afk"
   echo "install.sh: global scripts installed at $GLOBAL_HOME"
@@ -208,6 +213,13 @@ mkdir -p "$AFK_DEST"
 cp -R "$TEMPLATE_DIR/prompts"   "$AFK_DEST/"
 cp -R "$TEMPLATE_DIR/templates" "$AFK_DEST/"
 cp    "$TEMPLATE_DIR/labels.yml" "$AFK_DEST/labels.yml"
+# Dashboard (HTML+JS+server). Safe to re-copy on refresh — no user state
+# lives in here. Skipped in global scope; afk-dashboard.sh falls back
+# to $GLOBAL_HOME/dashboard when this directory is absent.
+if [[ "$SCOPE" != "global" && -d "$TEMPLATE_DIR/dashboard" ]]; then
+  rm -rf "$AFK_DEST/dashboard"
+  cp -R "$TEMPLATE_DIR/dashboard" "$AFK_DEST/"
+fi
 
 # Scripts: in local scope we copy in-place; in global scope we symlink to the
 # global install so updates flow through `git pull` of the toolkit.

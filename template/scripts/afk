@@ -12,6 +12,7 @@
 #   afk issue <N>                 — drive ONE child issue end-to-end
 #   afk document                  — kick the docs gate manually
 #   afk status                    — print state of every in-flight issue
+#   afk dashboard [--background]  — live web dashboard at http://127.0.0.1:8765
 #   afk stop-notify               — silence any active notify-developer alarm
 #
 # Override defaults via env or config.yml (see .afk/config.yml).
@@ -34,6 +35,7 @@ case "$cmd" in
   run)           "$SCRIPT_DIR/orchestrate.sh"    "$@" ;;
   issue)         "$SCRIPT_DIR/run-issue.sh"      "$@" ;;
   document)      "$SCRIPT_DIR/document-gate.sh"  "$@" ;;
+  dashboard)     "$SCRIPT_DIR/dashboard.sh"      "$@" ;;
 
   # --- inline subcommands (no dedicated script) --------------------------
   status)
@@ -65,9 +67,9 @@ case "$cmd" in
 
   # --- help / unknown ----------------------------------------------------
   help|--help|-h|"")
-    # Print the header comment block (lines 2..18) verbatim, stripping the
+    # Print the header comment block (lines 2..19) verbatim, stripping the
     # leading '# '. Keeps usage docs in one place.
-    sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '2,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     ;;
   *)
     afk::die "unknown command: $cmd  (try: afk help)"
