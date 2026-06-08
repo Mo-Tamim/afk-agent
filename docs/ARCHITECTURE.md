@@ -44,10 +44,10 @@ flowchart LR
   Scripts -.emit state + events.-> Dash
   Dash -.reads only.-> Repo
 
-  classDef skill fill:#dff,stroke:#08a;
-  classDef cli   fill:#ffd,stroke:#a80;
-  classDef data  fill:#eee,stroke:#666;
-  classDef ext   fill:#fdd,stroke:#a00;
+  classDef skill fill:#dff,stroke:#0369a1,color:#0f172a,stroke-width:1.5px;
+  classDef cli   fill:#ffd,stroke:#92400e,color:#0f172a,stroke-width:1.5px;
+  classDef data  fill:#eee,stroke:#475569,color:#0f172a,stroke-width:1.5px;
+  classDef ext   fill:#fdd,stroke:#991b1b,color:#0f172a,stroke-width:1.5px;
 ```
 
 Three actors:
@@ -235,9 +235,9 @@ flowchart LR
   E --> Dash
   E --> Custom
 
-  classDef script fill:#fff4d6,stroke:#a80;
-  classDef stream fill:#eee,stroke:#666;
-  classDef reader fill:#dff,stroke:#08a;
+  classDef script fill:#fff4d6,stroke:#92400e,color:#0f172a,stroke-width:1.5px;
+  classDef stream fill:#eee,stroke:#475569,color:#0f172a,stroke-width:1.5px;
+  classDef reader fill:#dff,stroke:#0369a1,color:#0f172a,stroke-width:1.5px;
   class O,RI,RP script
   class S,E stream
   class Status,Dash,Custom reader

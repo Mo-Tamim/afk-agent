@@ -76,10 +76,10 @@ flowchart LR
 
   Browser <--> API
 
-  classDef script fill:#fff4d6,stroke:#a80;
-  classDef disk   fill:#eee,stroke:#666;
-  classDef ext    fill:#fdd,stroke:#a00;
-  classDef serv   fill:#dff,stroke:#08a;
+  classDef script fill:#fff4d6,stroke:#92400e,color:#0f172a,stroke-width:1.5px;
+  classDef disk   fill:#eee,stroke:#475569,color:#0f172a,stroke-width:1.5px;
+  classDef ext    fill:#fdd,stroke:#991b1b,color:#0f172a,stroke-width:1.5px;
+  classDef serv   fill:#dff,stroke:#0369a1,color:#0f172a,stroke-width:1.5px;
   class O,RI,RP script
   class S,L,OL,E disk
   class G,T ext

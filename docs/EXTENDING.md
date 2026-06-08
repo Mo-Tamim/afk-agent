@@ -6,7 +6,7 @@ How to add a phase, a tracker, a runner, or a new user-facing skill.
 
 ```mermaid
 flowchart LR
-  classDef new fill:#dfd,stroke:#080;
+  classDef new fill:#dfd,stroke:#166534,color:#0f172a,stroke-width:1.5px;
 
   Q[What do I want to add?] --> P{Type}
   P -->|new phase| Phase[Write prompt + wire into run-issue.sh]:::new
