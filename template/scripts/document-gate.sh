@@ -48,7 +48,7 @@ for PRD in "${PRDS[@]}"; do
         --jq "[.[] | select(.body | test(\"(?ms)^##[ \\t]*Parent[ \\t]*\\\\n\\\\s*#${PRD}\\\\b|Parent:[ \\t]*#${PRD}\\\\b\"))]"
       ;;
     gitlab)
-      glab issue list -R "$REPO" --state all --label "$(afk::config_nested labels child afk-child)" \
+      glab issue list -R "$REPO" --all --label "$(afk::config_nested labels child afk-child)" \
         --per-page 200 --output json \
         | jq "[.[] | select(.description // .body // \"\" | test(\"(?ms)^##[ \\t]*Parent[ \\t]*\\\\n\\\\s*#${PRD}\\\\b|Parent:[ \\t]*#${PRD}\\\\b\")) | {number: (.iid // .number), state, body: (.description // .body)}]"
       ;;
