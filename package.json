@@ -1,0 +1,29 @@
+{
+  "name": "afk-agent",
+  "version": "0.1.0",
+  "description": "Universal Away-From-Keyboard agent toolkit: grill design into ADRs, synthesize PRDs, decompose into vertical slices, and run them through plan→implement→review→PR→merge→document with bounded parallelism. Tracker-agnostic (gh/glab) and agent-agnostic (Cursor, Claude Code, Codex, Copilot, …).",
+  "keywords": [
+    "skills",
+    "agent",
+    "afk",
+    "autonomous",
+    "prd",
+    "adr",
+    "tdd",
+    "orchestrator",
+    "github",
+    "gitlab",
+    "cursor",
+    "claude-code",
+    "codex",
+    "copilot"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mo-Tamim/afk-agent"
+  },
+  "skills": {
+    "directory": "skills"
+  }
+}

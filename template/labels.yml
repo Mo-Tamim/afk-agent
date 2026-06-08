@@ -1,0 +1,35 @@
+# Labels the AFK orchestrator depends on. Run `.afk/scripts/afk setup` to
+# create any that are missing. Editing colors / descriptions is safe.
+
+labels:
+  - name: ready-for-agent
+    color: 0E8A16
+    description: Fully specified, ready for an AFK agent to pick up.
+
+  - name: afk-in-progress
+    color: FBCA04
+    description: An AFK agent has claimed this issue and is working on it.
+
+  - name: afk-blocked
+    color: B60205
+    description: AFK run hit a blocker; needs human inspection.
+
+  - name: needs-human
+    color: D93F0B
+    description: Cannot be done by an agent — needs a human to act.
+
+  - name: afk-done
+    color: 5319E7
+    description: AFK run finished and merged.
+
+  - name: afk-prd
+    color: 1D76DB
+    description: Top-level PRD issue. Decomposer expands it into children.
+
+  - name: afk-child
+    color: BFD4F2
+    description: Child issue produced by an AFK PRD decomposition.
+
+  - name: afk-docs
+    color: 0075CA
+    description: Issue tracks the dev+user documentation pass for a PRD.

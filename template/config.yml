@@ -1,0 +1,62 @@
+# .afk/config.yml — Tunables for the AFK orchestrator.
+# Override per-run via flags on `.afk/scripts/afk`, or by exporting AFK_<KEY>=...
+
+# === Tracker ===
+tracker: __TRACKER__              # github | gitlab
+repo: __REPO__                    # <owner>/<repo>
+default_branch: __DEFAULT_BRANCH__
+
+# === Branching ===
+branch_prefix: afk/issue          # branches are named <prefix>-<N>-<slug>
+worktree_root: .afk/worktrees     # per-issue git worktrees live here
+
+# === Parallelism ===
+max_parallel: 3                   # Orchestrator pool size. Beyond this, issues queue.
+
+# === Phases (executed in order for every child issue) ===
+phases:
+  - plan
+  - implement
+  - review
+  - pr
+  - pr_wait_ci                    # poll until CI green / red / timeout
+  - pr_review
+  - pr_merge
+
+# === Timeouts ===
+issue_timeout_seconds: 7200       # Max wall time per issue. 0 = unlimited.
+ci_poll_interval_seconds: 30
+ci_max_wait_seconds: 1800
+
+# === Tracker labels (must exist; created automatically by `afk setup`) ===
+labels:
+  ready_for_agent: ready-for-agent
+  in_progress:     afk-in-progress
+  needs_human:     needs-human
+  blocked:         afk-blocked
+  done:            afk-done
+  prd:             afk-prd
+  child:           afk-child
+  docs:            afk-docs
+
+# === Agent runner ===
+# Swap binaries (cursor-agent, claude, codex, gh copilot, gemini, ...) without
+# editing scripts. Override AFK_AGENT_BIN / AFK_AGENT_FLAGS to test alternatives.
+agent_bin: __AGENT_BIN__
+agent_flags: "--print --force"
+
+# === Notification policy ===
+# notify-developer is invoked when:
+#  - any phase emits BLOCKED
+#  - CI stays red after ci_max_wait_seconds
+#  - merge is gated and waiting on review
+#  - issue exceeds issue_timeout_seconds
+notify_on_blocked: true
+notify_on_ci_red: true
+notify_on_merge_gate: true
+notify_on_timeout: true
+
+# === Merge mode ===
+# auto  — squash-merge immediately when CI is green and self-review approved
+# gated — pause after green CI and wait for the developer to type `/merge <PR#>`
+merge_mode: __MERGE_MODE__

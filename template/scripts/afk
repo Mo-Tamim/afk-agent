@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# `afk` — single entrypoint for the orchestrator.
+#
+# Subcommands:
+#   afk setup                     — create labels, sanity-check tools
+#   afk decompose <PRD>           — explode one PRD issue into children
+#   afk run [--once] [--prd N]    — start the parallel orchestrator
+#   afk issue <N>                 — drive ONE child issue end-to-end
+#   afk document                  — kick the docs gate manually
+#   afk status                    — print state of every in-flight issue
+#   afk stop-notify               — silence any active notify-developer alarm
+#
+# Override defaults via env or config.yml (see .afk/config.yml).
+
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+. "$SCRIPT_DIR/lib/common.sh"
+. "$SCRIPT_DIR/lib/state.sh"
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+  setup)
+    "$SCRIPT_DIR/ensure-setup.sh" "$@"
+    ;;
+  decompose)
+    "$SCRIPT_DIR/decompose.sh" "$@"
+    ;;
+  run)
+    "$SCRIPT_DIR/orchestrate.sh" "$@"
+    ;;
+  issue)
+    "$SCRIPT_DIR/run-issue.sh" "$@"
+    ;;
+  document)
+    "$SCRIPT_DIR/document-gate.sh" "$@"
+    ;;
+  status)
+    if ls "$AFK_STATE"/issue-*.json >/dev/null 2>&1; then
+      PHASE_ORDER=(plan implement review pr pr_review merge)
+      ORDER_JSON="$(printf '%s\n' "${PHASE_ORDER[@]}" | jq -R . | jq -s .)"
+      for f in "$AFK_STATE"/issue-*.json; do
+        jq -r --argjson order "$ORDER_JSON" '
+          . as $s
+          | ((($order - (.completed_phases // []))[0]) // "(all done)") as $next
+          | (((.completed_phases // []) | join(",")) | if . == "" then "—" else . end) as $done
+          | "#\($s.issue) [\($s.status // "?")] done=\($done) | resume_at=\($next) | branch=\($s.branch // "—") | pr=\($s.pr // "—") | updated=\($s.updated_at)"
+        ' "$f"
+      done
+    else
+      echo "(no state files)"
+    fi
+    ;;
+  stop-notify)
+    afk::notify_stop
+    echo "stopped any running notification alarms"
+    ;;
+  help|--help|-h|"")
+    sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    ;;
+  *)
+    afk::die "unknown command: $cmd  (try: afk help)"
+    ;;
+esac

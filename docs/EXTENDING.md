@@ -1,0 +1,191 @@
+# Extending afk-agent
+
+How to add a phase, a tracker, a runner, or a new user-facing skill.
+
+## Mental map
+
+```mermaid
+flowchart LR
+  classDef new fill:#dfd,stroke:#080;
+
+  Q[What do I want to add?] --> P{Type}
+  P -->|new phase| Phase[Write prompt + wire into run-issue.sh]:::new
+  P -->|new tracker| Track[Add case arms in lib/tracker.sh]:::new
+  P -->|new agent runner| Run[Set agent_bin / agent_flags<br/>in .afk/config.yml]:::new
+  P -->|new user skill| Skill[Drop skills/&lt;name&gt;/SKILL.md;<br/>npx skills will pick it up]:::new
+  P -->|new label| Lbl[Edit .afk/labels.yml<br/>re-run `afk setup`]:::new
+```
+
+## Add a new phase
+
+A phase is **one prompt + one sentinel contract + one slot in
+`run-issue.sh`**.
+
+1. Write `template/prompts/<phase>-prompt.md`. Take inputs via
+   `{{VAR}}` placeholders rendered by `run-phase.sh`. Emit exactly one
+   sentinel at the end.
+
+2. Wire it into `run-issue.sh`:
+
+   ```bash
+   if afk::state_phase_completed "$ISSUE" <phase>; then
+     afk::log "skipping <phase> (already completed)"
+   else
+     run_phase <phase> "<EXTRA_VAR=val>"
+     case "$PHASE_RC" in
+       0)  afk::state_phase_mark_completed "$ISSUE" <phase> ;;
+       10) afk::warn "NO_CHANGES; …" ;;
+       *)  afk::tracker::issue_add_label "$ISSUE" "$BLOCKED_LBL"
+           exit "$PHASE_RC" ;;
+     esac
+   fi
+   ```
+
+3. (Optional) If the phase emits a payload, persist it in
+   `run-phase.sh`'s payload-extraction `case`:
+
+   ```bash
+   case "$PHASE" in
+     ...
+     <phase>) afk::payload "$LOG" <tag> > "$LOG_DIR/<tag>.json" 2>/dev/null || true ;;
+   esac
+   ```
+
+4. Add the phase to `config.yml`'s documentation comment and update
+   `docs/LIFECYCLE.md`'s reference table.
+
+## Add a new tracker
+
+Two files change.
+
+### `template/scripts/lib/tracker.sh`
+
+Add a new arm to every `case "$TRACKER" in` block. Use the CLI of
+your choice (`forgejo`, `tea`, `linear`, your own wrapper). The
+public verbs that must work:
+
+```
+issue_view_json / issue_state / issue_labels
+issue_add_label / issue_remove_label
+issue_comment / issue_close / issue_create
+open_afk_children / open_afk_prds
+blockers (parses Markdown — no tracker work)
+pr_list_for_branch / pr_view_json / ci_status / pr_merged_for_issue
+```
+
+Each verb returns either JSON-parseable text via `jq` or a single
+scalar — keep the contract.
+
+### `template/scripts/ensure-setup.sh`
+
+Add a new arm for the auth check and label creation. Translate the
+hex color → whatever syntax the new tracker accepts.
+
+### Update the skills
+
+`skills/afk-tracker-issue/SKILL.md` and `skills/afk-tracker-pr/SKILL.md`
+list the CLI commands the agent uses inside a phase. Add the
+equivalent commands for your new tracker so the agent learns them
+on demand.
+
+That's it — no prompt or orchestrator change.
+
+## Add a new agent runner
+
+Pure config. In `.afk/config.yml`:
+
+```yaml
+agent_bin: my-custom-agent
+agent_flags: "--quiet --max-tokens 16384"
+```
+
+The runner contract is:
+
+- Reads the prompt on **stdin**.
+- Writes its work to **stdout**.
+- Exits when the turn ends.
+- Emits one of `<promise>COMPLETE</promise>`,
+  `<promise>NO_CHANGES</promise>`, `<promise>BLOCKED</promise>` on
+  the last meaningful line.
+
+If your runner can't read stdin, wrap it in a tiny shell script that
+captures stdin to a temp file and passes the path via a flag.
+
+## Add a new user-facing skill
+
+Drop a directory under `skills/`:
+
+```
+skills/
+└── my-new-skill/
+    └── SKILL.md
+```
+
+`SKILL.md` must have a YAML frontmatter:
+
+```markdown
+---
+name: my-new-skill
+description: One-sentence trigger. Use when the user says "X" or "Y".
+---
+
+# Skill: my-new-skill
+
+(body explaining what the agent should do, with worked examples,
+templates, quality gates, and failure modes.)
+```
+
+Re-publish via `npx skills add <repo>` or whatever you use; the new
+skill ships alongside the existing `afk-*` family.
+
+## Troubleshooting
+
+```mermaid
+flowchart TD
+  Issue[Something is wrong] --> Where{Where?}
+
+  Where -->|Phase never starts| Lock[Check .afk/state/issue-N.lock<br/>and `afk status`]
+  Where -->|Phase hangs forever| Timeout[Check issue_timeout_seconds<br/>in config.yml]
+  Where -->|"agent crashed"| Log[Read logs/issue-N-phase-latest/&lt;phase&gt;.log<br/>most recent lines have the error]
+  Where -->|Wrong PR opened| State[Inspect state/issue-N.json<br/>.pr field; clear with afk::state_phase_clear_completed]
+  Where -->|All children blocked| Labels[Verify labels.ready_for_agent<br/>actually exists on tracker]
+  Where -->|"unknown tracker"| Cfg[Open .afk/config.yml<br/>fix tracker: line]
+  Where -->|Tracker auth fails| Auth[Run gh auth status / glab auth status]
+```
+
+### Quick recovery recipes
+
+**Force-reset one phase** (after fixing an underlying issue):
+
+```bash
+jq '.completed_phases |= map(select(. != "implement"))' \
+  .afk/state/issue-42.json | sponge .afk/state/issue-42.json
+.afk/scripts/afk issue 42
+```
+
+**Manually unstick a blocked issue**:
+
+```bash
+gh issue edit 42 --remove-label afk-blocked --add-label ready-for-agent
+rm -f .afk/state/issue-42.lock
+.afk/scripts/afk issue 42
+```
+
+**Wipe and redo an issue from scratch** (destructive):
+
+```bash
+rm -f .afk/state/issue-42.json .afk/state/issue-42.lock
+rm -rf .afk/worktrees/issue-42
+git worktree prune
+git branch -D afk/issue-42-* 2>/dev/null
+gh issue edit 42 --remove-label afk-blocked --remove-label afk-in-progress --add-label ready-for-agent
+.afk/scripts/afk issue 42
+```
+
+**Verbose mode**:
+
+The bash scripts respect `set -x` via `BASH_XTRACEFD`. Quick form:
+
+```bash
+bash -x .afk/scripts/afk issue 42 2>&1 | tee /tmp/afk-trace.log
+```

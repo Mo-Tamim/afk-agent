@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+*.log
+
+# When testing the installer inside this repo, ignore the scaffolded dir.
+.afk/state/
+.afk/worktrees/
+.afk/logs/
