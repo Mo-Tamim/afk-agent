@@ -93,6 +93,10 @@ afk::require "$AGENT_BIN" jq git "$AFK_TRACKER_CLI"
 
 LOG="$LOG_DIR/${PHASE}.log"
 afk::log "spawning $AGENT_BIN in $CWD; log: $LOG"
+PHASE_START_EPOCH="$(date +%s)"
+afk::telemetry::emit phase_start \
+  issue "$ISSUE" phase "$PHASE" branch "${BRANCH:-}" \
+  cwd "$CWD" log "$LOG" run_id "$RUN_ID"
 
 # === 6. Spawn the agent with a wall-clock watchdog ===========================
 # The agent reads the prompt on stdin and streams to the log. We background
@@ -102,6 +106,9 @@ afk::log "spawning $AGENT_BIN in $CWD; log: $LOG"
 # shellcheck disable=SC2086
 ( cd "$CWD" && $AGENT_BIN $AGENT_FLAGS < "$PROMPT_OUT" ) > "$LOG" 2>&1 &
 AGENT_PID=$!
+afk::telemetry::emit agent_spawn \
+  issue "$ISSUE" phase "$PHASE" agent_pid "$AGENT_PID" \
+  agent_bin "$AGENT_BIN"
 
 TIMEOUT="$(afk::config issue_timeout_seconds 7200)"
 if [[ "$TIMEOUT" =~ ^[0-9]+$ ]] && (( TIMEOUT > 0 )); then
@@ -162,4 +169,9 @@ ln -sfn "$LOG_DIR" "$LATEST_LINK"
 
 afk::state_history_append "$ISSUE" "$PHASE" "$OUTCOME" "" || \
   afk::warn "could not record $OUTCOME state for issue $ISSUE (continuing)"
+PHASE_END_EPOCH="$(date +%s)"
+PHASE_DURATION=$(( PHASE_END_EPOCH - PHASE_START_EPOCH ))
+afk::telemetry::emit phase_end \
+  issue "$ISSUE" phase "$PHASE" outcome "$OUTCOME" rc "$RC" \
+  duration_s "$PHASE_DURATION" log "$LOG" run_id "$RUN_ID"
 exit "$RC"

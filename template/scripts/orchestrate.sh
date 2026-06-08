@@ -32,6 +32,11 @@ afk::require jq git "$AFK_TRACKER_CLI"
 AGENT_BIN="$(afk::config agent_bin cursor-agent)"
 afk::require "$AGENT_BIN"
 
+afk::telemetry::emit orchestrator_start \
+  max_parallel "$(afk::config max_parallel 3)" \
+  tracker "${TRACKER:-?}" repo "${REPO:-?}"
+trap 'afk::telemetry::emit orchestrator_exit reason=trap; exit' INT TERM
+
 # === Args ====================================================================
 
 ONCE=0
@@ -89,12 +94,14 @@ afk::pick_batch() {
 declare -A INFLIGHT=()
 
 reap_one() {
-  local pid="$1"
+  local pid="$1" rc=0 issue="${INFLIGHT[$pid]}"
   if wait "$pid"; then
-    afk::log "issue ${INFLIGHT[$pid]} finished cleanly"
+    afk::log "issue ${issue} finished cleanly"
   else
-    afk::warn "issue ${INFLIGHT[$pid]} exited non-zero"
+    rc=$?
+    afk::warn "issue ${issue} exited non-zero (rc=$rc)"
   fi
+  afk::telemetry::emit runner_reap issue "$issue" runner_pid "$pid" rc "$rc"
   unset 'INFLIGHT[$pid]'
 }
 
@@ -123,6 +130,7 @@ while :; do
     afk::log "spawning runner for issue #$NEXT"
     "$SCRIPT_DIR/run-issue.sh" "$NEXT" >"$AFK_LOGS/issue-${NEXT}-runner.log" 2>&1 &
     INFLIGHT[$!]="$NEXT"
+    afk::telemetry::emit runner_spawn issue "$NEXT" runner_pid "$!"
   done
 
   if (( ${#INFLIGHT[@]} == 0 )); then
@@ -142,3 +150,4 @@ while :; do
 done
 
 afk::log "orchestrator exiting; in-flight runners drained."
+afk::telemetry::emit orchestrator_exit reason=normal
