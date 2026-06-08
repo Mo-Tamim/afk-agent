@@ -303,5 +303,9 @@ Next steps:
        .afk/scripts/afk decompose <PRD#>
        .afk/scripts/afk run
 
-See docs/INSTALLATION.md for the full reference.
+  4. (Optional) Watch progress live in a browser:
+       .afk/scripts/afk dashboard --background    # http://127.0.0.1:8765
+
+See docs/INSTALLATION.md for the full reference,
+and docs/DASHBOARD.md for the live view.
 EOF

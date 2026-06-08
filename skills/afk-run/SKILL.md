@@ -32,7 +32,9 @@ making the user juggle a separate terminal.
 | "Process one batch and stop"                | `.afk/scripts/afk run --once`                  |
 | "Run all children of PRD #42 in one pass"   | `.afk/scripts/afk run --once --prd 42`         |
 | "Run AFK in the background"                 | spawn `.afk/scripts/afk run` in a fresh detached terminal (see below) |
-| "What's in flight?"                         | `.afk/scripts/afk status`                      |
+| "What's in flight?" / "Snapshot"            | `.afk/scripts/afk status`                      |
+| "Show me a live dashboard" / "Open the UI"  | `.afk/scripts/afk dashboard --background` then point the user at `http://127.0.0.1:8765` |
+| "Stop the dashboard"                        | `.afk/scripts/afk dashboard --stop`            |
 | "Silence the alarm"                         | `.afk/scripts/afk stop-notify`                 |
 | "Document PRD #42 now"                      | `.afk/scripts/afk document`                    |
 
@@ -107,9 +109,14 @@ After spawning, tell the user:
 >
 >     tail -f .afk/logs/orchestrator.log
 >
+> Or open the live dashboard:
+>
+>     .afk/scripts/afk dashboard --background    # http://127.0.0.1:8765
+>
 > Stop with:
 >
 >     pkill -f orchestrate.sh
+>     .afk/scripts/afk dashboard --stop
 >
 > You'll get a `notify-developer` alarm only when something needs
 > you — feel free to close the chat.

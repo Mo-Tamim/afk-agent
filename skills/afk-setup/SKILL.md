@@ -128,6 +128,8 @@ On `y`:
    - `/afk-grill` for stress-testing a new design into ADRs
    - `/afk-prd` for turning a sketched solution into a tracker PRD
    - `.afk/scripts/afk decompose <PRD#>` for kicking off a run
+   - `.afk/scripts/afk dashboard --background` (optional) for a
+     live web view of orchestrator progress
    - `docs/INSTALLATION.md` for the full reference
 
 ### 4. Idempotency

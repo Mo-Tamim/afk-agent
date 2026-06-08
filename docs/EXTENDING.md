@@ -14,6 +14,8 @@ flowchart LR
   P -->|new agent runner| Run[Set agent_bin / agent_flags<br/>in .afk/config.yml]:::new
   P -->|new user skill| Skill[Drop skills/&lt;name&gt;/SKILL.md;<br/>npx skills will pick it up]:::new
   P -->|new label| Lbl[Edit .afk/labels.yml<br/>re-run `afk setup`]:::new
+  P -->|new dashboard panel| Dash[Add endpoint in dashboard/server.py<br/>+ panel in static/app.js]:::new
+  P -->|new telemetry event| Tel[Call afk::telemetry::emit<br/>from a script]:::new
 ```
 
 ## Add a new phase
@@ -111,6 +113,69 @@ The runner contract is:
 If your runner can't read stdin, wrap it in a tiny shell script that
 captures stdin to a temp file and passes the path via a flag.
 
+## Add a dashboard panel
+
+The dashboard (`template/dashboard/`) is intentionally small: a
+stdlib HTTP server plus one HTML page with vanilla JS. There's no
+build step.
+
+```mermaid
+flowchart LR
+  Input[Source of truth<br/>state file / log file / events.ndjson / tracker CLI] --> Reader[Reader function<br/>in server.py]
+  Reader --> Endpoint[New /api/&lt;something&gt;<br/>JSON handler]
+  Endpoint --> Poll[Browser polls<br/>via fetch in app.js]
+  Poll --> Render[Render into a new DOM panel<br/>in index.html]
+```
+
+Recipe:
+
+1. **Pick the input.** Pre-existing readers cover state, logs,
+   events, worktrees, and tracker PRs (see
+   [DASHBOARD.md § Extending](./DASHBOARD.md#extending)). For a
+   custom source (a third-party CLI, a metric file, …), add a
+   small reader function alongside them.
+2. **Add the endpoint.** In `template/dashboard/server.py`'s
+   `Handler.do_GET`, add a new branch:
+
+   ```python
+   elif path == "/api/my-panel":
+       self._send_json({"things": my_reader(self.dashboard.afk_root)})
+   ```
+3. **Fetch from the UI.** In `template/dashboard/static/app.js`, add
+   a `jget("/api/my-panel")` call inside `tick()` (or a slower
+   sub-tick if appropriate).
+4. **Render.** Either reuse a `.panel` div in `index.html` or add a
+   new column. Styles live in `static/styles.css` — keep the new
+   block CSS-only, no preprocessor.
+
+Because the dashboard is read-only by contract, **do not** add a
+`POST` endpoint that mutates `.afk/state/` or the tracker — go
+through `.afk/scripts/afk` for any side effect.
+
+## Add a new telemetry event
+
+`afk::telemetry::emit` is the single emit primitive. To record a
+new lifecycle moment:
+
+```bash
+# Inside any orchestrator script
+afk::telemetry::emit my_event \
+  issue   "$ISSUE" \
+  phase   "$PHASE" \
+  detail  "anything you want to surface"
+```
+
+Reserved fields (`ts`, `ts_epoch`, `kind`, `scope`, `pid`) are
+injected automatically; everything else is your `k v` payload. The
+function is best-effort — never wrap it in a critical-path check.
+
+Document the new `kind` in:
+
+- [DASHBOARD.md § Telemetry](./DASHBOARD.md#telemetry) — table of
+  emitted events.
+- [LIFECYCLE.md § Telemetry events](./LIFECYCLE.md#telemetry-events) — mermaid timeline if it
+  belongs in the per-issue flow.
+
 ## Add a new user-facing skill
 
 Drop a directory under `skills/`:
@@ -151,6 +216,8 @@ flowchart TD
   Where -->|All children blocked| Labels[Verify labels.ready_for_agent<br/>actually exists on tracker]
   Where -->|"unknown tracker"| Cfg[Open .afk/config.yml<br/>fix tracker: line]
   Where -->|Tracker auth fails| Auth[Run gh auth status / glab auth status]
+  Where -->|Dashboard won't start| Dash1[Check port: lsof -i :8765<br/>or pass --port 9000]
+  Where -->|Dashboard shows 'dead'<br/>but orchestrator is running| Dash2[Linux only feature.<br/>On macOS, fs/log panels still work.]
 ```
 
 ### Quick recovery recipes
@@ -188,4 +255,17 @@ The bash scripts respect `set -x` via `BASH_XTRACEFD`. Quick form:
 
 ```bash
 bash -x .afk/scripts/afk issue 42 2>&1 | tee /tmp/afk-trace.log
+```
+
+**Dashboard stuck or stale**:
+
+```bash
+# Kill any orphaned server (no-op if none)
+.afk/scripts/afk dashboard --stop
+
+# Restart in foreground to see startup errors
+.afk/scripts/afk dashboard --no-tracker      # skip glab/gh if those are flaky
+
+# Verify the events stream is being written
+tail -n 5 .afk/logs/events.ndjson
 ```

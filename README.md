@@ -135,8 +135,12 @@ you the resolved config, then scaffolds `.afk/` for you.
 .afk/scripts/afk decompose 42       # PRD #42 → N child issues
 .afk/scripts/afk run                # background orchestrator (parallel)
 .afk/scripts/afk status             # snapshot of every in-flight issue
+.afk/scripts/afk dashboard          # live web dashboard at http://127.0.0.1:8765
 .afk/scripts/afk stop-notify        # silence any wake-up alarm
 ```
+
+> Want a live picture instead of `status` snapshots? See
+> [docs/DASHBOARD.md](./docs/DASHBOARD.md).
 
 For the chat-vs-terminal decision and how to fully detach the
 orchestrator from chat for long runs, see
@@ -162,10 +166,12 @@ flowchart TB
   Doc -->|merge| PRD2[(PRD closed\nlabel: afk-done)]
 
   Pool -.->|BLOCKED / timeout / merge gate| Notify[notify-developer\naudible alarm]
+  Pool -.->|emits events.ndjson<br/>+ state files| DB[afk dashboard\nlive web view]
 ```
 
 See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for the full
-breakdown of phases, sentinels, and resume semantics.
+breakdown of phases, sentinels, and resume semantics, and
+[docs/DASHBOARD.md](./docs/DASHBOARD.md) for the dashboard.
 
 ## Repo layout
 
@@ -191,6 +197,7 @@ afk-agent/
 │   ├── labels.yml
 │   ├── prompts/                   ← 8 phase prompts
 │   ├── templates/                 ← issue / PR / docs templates
+│   ├── dashboard/                 ← stdlib HTTP server + HTML/JS UI
 │   └── scripts/                   ← orchestrator (bash)
 │       └── lib/                   ← common helpers + tracker abstraction
 └── docs/
@@ -199,6 +206,7 @@ afk-agent/
     ├── GLOSSARY.md                 ← every term & abbreviation
     ├── ARCHITECTURE.md
     ├── LIFECYCLE.md
+    ├── DASHBOARD.md                ← live web dashboard + telemetry
     ├── INSTALLATION.md
     ├── EXTENDING.md
     └── PUBLISHING.md
@@ -213,6 +221,7 @@ afk-agent/
 | Look up a term or abbreviation               | [docs/GLOSSARY.md](./docs/GLOSSARY.md)              |
 | Understand the architecture                  | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)      |
 | Reference the phase lifecycle quickly        | [docs/LIFECYCLE.md](./docs/LIFECYCLE.md)            |
+| Watch progress live in a browser             | [docs/DASHBOARD.md](./docs/DASHBOARD.md)            |
 | Install on a different agent / tracker       | [docs/INSTALLATION.md](./docs/INSTALLATION.md)      |
 | Add a new tracker, phase, or skill           | [docs/EXTENDING.md](./docs/EXTENDING.md)            |
 | Publish your fork to skills.sh               | [docs/PUBLISHING.md](./docs/PUBLISHING.md)          |
@@ -242,6 +251,12 @@ afk-agent/
   hard block — it triggers
   [`notify-developer`](https://www.skills.sh/) or the configured
   equivalent and stops.
+- **Observability for free.** Every phase boundary, runner spawn,
+  and agent invocation appends one JSON line to
+  `.afk/logs/events.ndjson`. The
+  [live web dashboard](./docs/DASHBOARD.md) consumes that stream
+  plus the on-disk state files — no agents instrumented, no extra
+  daemons, no databases.
 
 ## Status
 

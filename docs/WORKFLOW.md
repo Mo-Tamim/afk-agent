@@ -513,6 +513,18 @@ time of about **(4/3) × per-child** ≈ 10–40 minutes.
 
 Close your laptop. Make coffee. Go for a walk.
 
+> **Watch progress in a browser (optional).** If you'd rather see
+> the run live than wait for an alarm, launch the dashboard:
+>
+> ```bash
+> .afk/scripts/afk dashboard --background   # detached on http://127.0.0.1:8765
+> ```
+>
+> The dashboard auto-refreshes every 2 s and shows orchestrator
+> liveness, per-issue phase pipelines, log tails, worktrees, PRs,
+> and CI. It's read-only and safe to leave open. See
+> [docs/DASHBOARD.md](./DASHBOARD.md).
+
 The orchestrator will:
 
 - Keep up to `max_parallel` children flowing.
@@ -521,6 +533,8 @@ The orchestrator will:
 - Self-review every PR via a fresh agent (no context-bleed bias).
 - Squash-merge each PR when green and approved.
 - Trigger the `document` phase as soon as the last child closes.
+- Emit one JSON line per lifecycle event to
+  `.afk/logs/events.ndjson`, which the dashboard consumes.
 
 The orchestrator will **wake you up** only when:
 
@@ -687,6 +701,7 @@ PER PRD
   /afk-run process queue                  inline orchestrator (small PRDs)
   .afk/scripts/afk run                    background orchestrator (big PRDs)
   /afk-run status                         what's in flight
+  .afk/scripts/afk dashboard --background live web view (http://127.0.0.1:8765)
 
 ON ALARM
   /afk-run status                         see what's blocked

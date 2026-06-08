@@ -183,10 +183,29 @@ GitLab uses the same slug syntax.
 
 # Should print the help banner.
 .afk/scripts/afk help
+
+# Should print the dashboard usage banner (no network call).
+.afk/scripts/afk dashboard --help
 ```
 
 If any of those fail, see [docs/EXTENDING.md](./EXTENDING.md)'s
 troubleshooting section.
+
+### Optional: launch the live dashboard
+
+The scaffold ships a stdlib-only HTTP server at `.afk/dashboard/`
+that turns `.afk/state/`, `.afk/logs/`, `git worktree list`, and
+`gh` / `glab` into a single auto-refreshing web view. Requires
+Python 3.8+ (no `pip install`).
+
+```bash
+.afk/scripts/afk dashboard               # foreground at http://127.0.0.1:8765
+.afk/scripts/afk dashboard --background  # detached; .afk/logs/dashboard.{log,pid}
+.afk/scripts/afk dashboard --stop        # kill the backgrounded one
+```
+
+See [docs/DASHBOARD.md](./DASHBOARD.md) for the full UI tour, the
+HTTP API, and the telemetry stream the dashboard consumes.
 
 ## 6. Per-agent quirks
 
