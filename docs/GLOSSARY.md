@@ -43,7 +43,13 @@ section to whichever rules file your repo uses (`AGENTS.md`,
 ### `afk` (the script)
 The single CLI entrypoint at `.afk/scripts/afk`. Dispatches to
 `setup`, `decompose`, `run`, `issue`, `document`, `status`,
-`stop-notify`.
+`dashboard`, `stop-notify`.
+
+### `afk dashboard`
+The `subcommand` that launches the live web dashboard at
+`http://127.0.0.1:8765`. Read-only; consumes `state file`s,
+`logs/`, `events.ndjson`, `git worktree list`, and `gh`/`glab`. See
+[DASHBOARD.md](./DASHBOARD.md).
 
 ### `afk-blocked`
 A `label` the orchestrator applies to any issue whose phase
@@ -150,6 +156,14 @@ broadest tool support out of the box.
 
 ## D
 
+### Dashboard
+The live web view at `.afk/dashboard/`, launched via
+`afk dashboard`. A stdlib Python HTTP server that reads
+`state files`, `logs/`, `events.ndjson`, `git worktree list`, and
+the `tracker` CLI, and renders a single-page UI that auto-refreshes
+every 1–15 s. Read-only — never writes to AFK state. See
+[DASHBOARD.md](./DASHBOARD.md).
+
 ### `decompose` (phase)
 The phase that turns one PRD into N child issues. Reads the PRD
 body, emits a `<children>JSON</children>` payload that the bash
@@ -183,6 +197,18 @@ The orchestrator's scanner (`document-gate.sh`) that checks every
 open `afk-prd` issue to see if all its children are closed. If so,
 it kicks the `document` phase. Runs after every idle pass of the
 parallel orchestrator.
+
+---
+
+## E
+
+### `events.ndjson`
+`.afk/logs/events.ndjson`. Append-only JSON-lines stream of every
+significant lifecycle transition (`orchestrator_start`,
+`runner_spawn`, `phase_start`, `phase_end`, `runner_reap`,
+`orchestrator_exit`, etc.). Emitted by the
+`afk::telemetry::emit` helper on a best-effort basis — failures
+never change script behavior. Consumed by the `dashboard`.
 
 ---
 
@@ -434,6 +460,13 @@ log. Updated atomically via `jq`-into-tempfile-then-`mv`.
 ### TDD — Test-Driven Development
 Red → green → refactor, one behavior at a time. Enforced (loosely)
 by the `afk-tdd` skill during the `implement` phase.
+
+### Telemetry
+The append-only `events.ndjson` stream of structured lifecycle
+events. Emitted by every orchestrator script via
+`afk::telemetry::emit`. Best-effort, never on the critical path.
+Consumed by the `dashboard` and any custom analytics you wire up
+on top.
 
 ### Test surface
 The set of behaviors a phase plans to test. Emitted in the `plan`

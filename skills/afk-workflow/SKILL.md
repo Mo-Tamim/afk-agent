@@ -107,6 +107,17 @@ reason on the very next line. The orchestrator routes BLOCKED through
 - The merge phase first checks `state == "MERGED"` and short-circuits
   with COMPLETE if the merge already happened.
 
+## Telemetry
+
+Every lifecycle transition (orchestrator start/exit, runner
+spawn/reap, issue start/end, phase start/end, agent spawn) appends
+one JSON line to `.afk/logs/events.ndjson` via
+`afk::telemetry::emit` in `lib/common.sh`. This is **best-effort**:
+write failures are swallowed and never change the orchestrator's
+exit code. The `dashboard` and any custom analytics read this
+stream — agents do not need to emit anything themselves. See
+[DASHBOARD.md § Telemetry](../../docs/DASHBOARD.md#telemetry).
+
 ## When to BLOCK vs NO_CHANGES vs COMPLETE
 
 - **COMPLETE** — the phase did its job.

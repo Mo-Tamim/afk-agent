@@ -29,14 +29,25 @@ contents into the prompt — load on demand.
 ### Daily commands
 
 ```bash
-.afk/scripts/afk setup            # one-time: create labels, sanity-check
-.afk/scripts/afk decompose <PRD#> # PRD → child issues
-.afk/scripts/afk run              # bounded-parallelism orchestrator (long-running)
-.afk/scripts/afk run --once       # process current queue then exit
-.afk/scripts/afk issue <N>        # drive one child end-to-end
-.afk/scripts/afk status           # snapshot of every in-flight issue
-.afk/scripts/afk stop-notify      # silence any active wake-up alarm
+.afk/scripts/afk setup                 # one-time: create labels, sanity-check
+.afk/scripts/afk decompose <PRD#>      # PRD → child issues
+.afk/scripts/afk run                   # bounded-parallelism orchestrator (long-running)
+.afk/scripts/afk run --once            # process current queue then exit
+.afk/scripts/afk issue <N>             # drive one child end-to-end
+.afk/scripts/afk status                # snapshot of every in-flight issue
+.afk/scripts/afk dashboard             # live web dashboard (http://127.0.0.1:8765)
+.afk/scripts/afk dashboard --background  # detached; use --stop to halt
+.afk/scripts/afk stop-notify           # silence any active wake-up alarm
 ```
+
+### Telemetry
+
+Every significant lifecycle transition appends one JSON line to
+`.afk/logs/events.ndjson` (kinds: `orchestrator_start`,
+`runner_spawn`, `issue_start`, `phase_start`, `agent_spawn`,
+`phase_end`, `issue_end`, `runner_reap`, `orchestrator_exit`). The
+dashboard consumes this stream. Best-effort — failures here never
+change orchestrator behaviour.
 
 ### Driving from chat
 

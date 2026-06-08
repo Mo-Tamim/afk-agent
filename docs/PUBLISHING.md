@@ -50,6 +50,9 @@ The conventions this repo follows:
 - [ ] No secrets, no `.env` files, no internal paths in any file.
 - [ ] `install.sh` is executable (`chmod +x`).
 - [ ] Bash scripts under `template/scripts/` are executable.
+- [ ] `template/dashboard/server.py` is present (stdlib-only;
+      no `requirements.txt` needed). Document the Python 3.8+
+      requirement in your README.
 - [ ] Replace every `Mo-Tamim` placeholder with your actual
       GitHub handle.
 

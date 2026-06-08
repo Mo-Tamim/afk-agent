@@ -91,11 +91,23 @@ sequenceDiagram
 
 **Cons:**
 - The agent loses real-time visibility. You only know what
-  `afk status` and `tail .afk/logs/orchestrator.log` tell you.
+  `afk status`, `afk dashboard`, or
+  `tail .afk/logs/orchestrator.log` tell you.
 - Requires `notify-developer` (or compatible) for sound — without
   it, you have to remember to check in.
 
 **When to use:** 4+ children, long-running PRDs, overnight runs.
+
+**Watch live (optional):** spawn the read-only dashboard alongside,
+then open the URL in your browser:
+
+```bash
+.afk/scripts/afk dashboard --background
+# → http://127.0.0.1:8765 (no auth; bound to loopback)
+```
+
+Stop it with `.afk/scripts/afk dashboard --stop`. See
+[DASHBOARD.md](./DASHBOARD.md).
 
 **Cancel:**
 
@@ -213,3 +225,4 @@ not, fall back to terminal-only.
 | Terminal-foreground| `.afk/scripts/afk issue N` OR `.afk/scripts/afk run --once`                            |
 | Terminal-background| `setsid nohup .afk/scripts/afk run > .afk/logs/orchestrator.log 2>&1 &`               |
 | Hybrid             | chat for steps 4–6, terminal-background for step 7, chat again for step 9            |
+| Dashboard (any)    | `.afk/scripts/afk dashboard --background` → `http://127.0.0.1:8765`                  |

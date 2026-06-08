@@ -8,6 +8,8 @@ The dashboard is **read-only** with respect to AFK's own state. It
 reads `.afk/state/issue-*.json`, `.afk/logs/`, `git worktree list`, and
 (optionally) `glab`/`gh` for PR + CI. It never writes to those paths.
 
+## Layout at a glance
+
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │ ● AFK   orchestrator alive · 1 runner · 2 agents      [refresh ▾]    │
@@ -21,6 +23,100 @@ reads `.afk/state/issue-*.json`, `.afk/logs/`, `git worktree list`, and
 │ Worktree │  #10  afk/issue-10-ssh-primitive       │  Orchestrator log │
 │ Pull req │  plan→implement→…                      │  ────────────     │
 └──────────┴───────────────────────────────────────┴───────────────────┘
+```
+
+## Data flow
+
+The dashboard is a thin reader on top of the same artifacts the
+orchestrator already produces. Nothing in the bash scripts knows the
+dashboard exists.
+
+```mermaid
+flowchart LR
+  subgraph Scripts["Orchestrator scripts (.afk/scripts/)"]
+    O[orchestrate.sh]
+    RI[run-issue.sh]
+    RP[run-phase.sh]
+  end
+
+  subgraph Disk["On-disk state (.afk/)"]
+    S[(state/issue-N.json)]
+    L[(logs/issue-N-phase-*/)]
+    OL[(logs/orchestrator.log)]
+    E[(logs/events.ndjson)]
+  end
+
+  subgraph Outside["Outside world"]
+    G[(git worktree list)]
+    T[(gh / glab: PR + CI)]
+  end
+
+  subgraph Server["dashboard/server.py"]
+    API[HTTP API<br/>/api/summary, /api/issues,<br/>/api/log, /api/events]
+    CACHE[Tracker cache<br/>30s TTL]
+  end
+
+  Browser[Web browser<br/>polling 1–15s]
+
+  O -- writes --> OL
+  O -- writes --> E
+  RI -- writes --> S
+  RI -- writes --> E
+  RP -- writes --> S
+  RP -- writes --> L
+  RP -- writes --> E
+
+  API -- reads --> S
+  API -- reads --> L
+  API -- reads --> OL
+  API -- reads --> E
+  API -- shells out --> G
+  API --> CACHE
+  CACHE -- shells out --> T
+
+  Browser <--> API
+
+  classDef script fill:#fff4d6,stroke:#a80;
+  classDef disk   fill:#eee,stroke:#666;
+  classDef ext    fill:#fdd,stroke:#a00;
+  classDef serv   fill:#dff,stroke:#08a;
+  class O,RI,RP script
+  class S,L,OL,E disk
+  class G,T ext
+  class API,CACHE serv
+```
+
+## Polling timeline
+
+Each component refreshes at its own cadence to keep the dashboard
+responsive without thrashing the tracker:
+
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant S as server.py
+  participant FS as Filesystem
+  participant CLI as glab / gh
+  Note over B: every 2s (configurable)
+  B->>S: GET /api/summary
+  S->>FS: scan /proc/* + read config.yml
+  S-->>B: orchestrator status + processes
+  B->>S: GET /api/issues
+  S->>FS: read .afk/state/* + log dirs
+  S->>CLI: glab mr list  (cached 30s)
+  S-->>B: issues + PR + CI
+  Note over B: every ~2s on selected phase
+  B->>S: GET /api/issues/N/log?phase=X&tail=300
+  S->>FS: tail -n 300 of latest log
+  S-->>B: log text
+  Note over B: every ~6s
+  B->>S: GET /api/worktrees
+  S->>FS: git worktree list --porcelain
+  S-->>B: worktrees
+  Note over B: every ~4s
+  B->>S: GET /api/orchestrator/log?tail=120
+  S->>FS: tail of .afk/logs/orchestrator.log
+  S-->>B: orchestrator log
 ```
 
 ## Run it
@@ -86,6 +182,31 @@ When run against scripts that include telemetry hooks (everything in
 this branch onward), `lib/common.sh::afk::telemetry::emit` appends a
 JSON line to `.afk/logs/events.ndjson` at every significant step:
 
+```mermaid
+sequenceDiagram
+  participant O as orchestrate.sh
+  participant R as run-issue.sh
+  participant P as run-phase.sh
+  participant A as $AGENT_BIN
+  participant E as events.ndjson
+
+  O->>E: orchestrator_start
+  O->>R: spawn for issue N
+  O->>E: runner_spawn(issue=N, runner_pid)
+  R->>E: issue_start(issue=N)
+  loop per phase
+    R->>P: run-phase.sh <phase> N
+    P->>E: phase_start(issue, phase, log, run_id)
+    P->>A: spawn agent (prompt on stdin)
+    P->>E: agent_spawn(agent_pid, agent_bin)
+    A-->>P: <promise>OUTCOME</promise>
+    P->>E: phase_end(outcome, rc, duration_s)
+  end
+  R->>E: issue_end(issue=N, rc)
+  O->>E: runner_reap(issue=N, rc)
+  O->>E: orchestrator_exit(reason)
+```
+
 | `kind`              | emitted by         | fields                                          |
 | ------------------- | ------------------ | ----------------------------------------------- |
 | `orchestrator_start`| `orchestrate.sh`   | `max_parallel`, `tracker`, `repo`               |
@@ -137,3 +258,22 @@ prompts, paths, and stack traces.
 - The dashboard is intentionally single-tenant: one HTTP server per
   AFK repo. To watch several repos, run several dashboards on
   different ports.
+
+## Extending
+
+The dashboard reads four classes of input — to add a new panel,
+extend the server.py reader or add a new endpoint:
+
+| Input                                     | Reader function           | Notes                          |
+|-------------------------------------------|---------------------------|--------------------------------|
+| `.afk/state/issue-*.json`                 | `load_state()`            | Per-issue resume state         |
+| `.afk/logs/issue-N-phase-<run>/*.log`     | `list_phase_logs()` + `tail_file()` | Phase runs with mtime + size |
+| `.afk/logs/orchestrator.log`              | `tail_file()`             | Plain text tail               |
+| `.afk/logs/events.ndjson`                 | `read_events()`           | Filter by `since=<epoch>`     |
+| `git worktree list --porcelain`           | `list_worktrees()`        | 10 s timeout                  |
+| `glab mr list` / `gh pr list`             | `tracker_pr_for_branch()` via `TrackerCache` | 30 s TTL |
+
+For more advanced panels (timeline view, throughput, queue depth) the
+`events.ndjson` stream is the right input — it's append-only,
+strictly-ordered, and machine-parseable. See
+[EXTENDING.md § Add a dashboard panel](./EXTENDING.md#add-a-dashboard-panel).

@@ -29,6 +29,7 @@ flowchart LR
   subgraph Remote[Outside world]
     Tracker[(Tracker:\nGitHub or GitLab)]:::ext
     NotifyDev{{notify-developer\naudible alarm}}:::ext
+    Dash{{afk dashboard\nlocal web view}}:::ext
   end
 
   G --> Repo
@@ -40,6 +41,8 @@ flowchart LR
   Runner --> Tracker
   Runner --> Repo
   Scripts -->|on blocker| NotifyDev
+  Scripts -.emit state + events.-> Dash
+  Dash -.reads only.-> Repo
 
   classDef skill fill:#dff,stroke:#08a;
   classDef cli   fill:#ffd,stroke:#a80;
@@ -203,6 +206,55 @@ Adding a third tracker (Forgejo, Gitea, Linear) is one file: add the
 matching authentication step in `ensure-setup.sh`. Prompts and skills
 don't change.
 
+## Observability layer
+
+The orchestrator emits two parallel streams that anything else can
+read without touching the scripts:
+
+```mermaid
+flowchart LR
+  subgraph Scripts[Orchestrator scripts]
+    O[orchestrate.sh]
+    RI[run-issue.sh]
+    RP[run-phase.sh]
+  end
+  subgraph Streams[Two parallel streams]
+    S[(.afk/state/<br/>issue-N.json)]
+    E[(.afk/logs/<br/>events.ndjson)]
+  end
+  subgraph Readers[Read-only consumers]
+    Status[afk status<br/>CLI snapshot]
+    Dash[afk dashboard<br/>live web view]
+    Custom[your own analytics<br/>scripts / Grafana / etc.]
+  end
+
+  O & RI & RP -- atomic jq+mv --> S
+  O & RI & RP -- append --> E
+  S --> Status
+  S --> Dash
+  E --> Dash
+  E --> Custom
+
+  classDef script fill:#fff4d6,stroke:#a80;
+  classDef stream fill:#eee,stroke:#666;
+  classDef reader fill:#dff,stroke:#08a;
+  class O,RI,RP script
+  class S,E stream
+  class Status,Dash,Custom reader
+```
+
+- **State files** (`.afk/state/issue-N.json`) are the **resume cursor**.
+  Atomically updated via `jq → tempfile → mv`. The single source of
+  truth for "is this phase done?".
+- **Event stream** (`.afk/logs/events.ndjson`) is the **timeline**.
+  Append-only NDJSON, one line per lifecycle transition (see
+  [DASHBOARD.md § Telemetry](./DASHBOARD.md#telemetry)). Best-effort —
+  scripts continue working even if the file is unwritable.
+- Both streams are **read-only inputs** to downstream tools. Nothing
+  in the orchestrator depends on a reader being present. You can
+  swap `afk dashboard` for a custom Grafana exporter without
+  touching a single phase prompt.
+
 ## What ends up where
 
 ```
@@ -215,10 +267,11 @@ don't change.
     ├── prompts/                       ← 8 phase prompts (committed)
     ├── templates/                     ← child issue / PR / docs templates (committed)
     ├── skills/                        ← copy of afk-* skills (committed; agent loads these)
-    ├── scripts/                       ← orchestrator + lib/ (committed)
+    ├── scripts/                       ← orchestrator + lib/ + dashboard.sh (committed)
+    ├── dashboard/                     ← stdlib HTTP server + HTML/JS UI (committed)
     ├── state/                         ← per-issue JSON state (gitignored)
     ├── worktrees/                     ← per-issue git worktrees (gitignored)
-    └── logs/                          ← timestamped phase logs (gitignored)
+    └── logs/                          ← timestamped phase logs + events.ndjson + dashboard.{log,pid} (gitignored)
 ```
 
 `.afk/` is fully self-contained: a fresh clone of the repo + a
@@ -229,6 +282,8 @@ on it. Nothing else needs to be installed globally.
 
 - [LIFECYCLE.md](./LIFECYCLE.md) — every phase, every sentinel,
   blow-by-blow.
+- [DASHBOARD.md](./DASHBOARD.md) — the live web view and telemetry
+  stream that ride on top of this architecture.
 - [INSTALLATION.md](./INSTALLATION.md) — installer flags, manual
   install, per-agent quirks.
 - [EXTENDING.md](./EXTENDING.md) — adding a phase, a tracker, or a new

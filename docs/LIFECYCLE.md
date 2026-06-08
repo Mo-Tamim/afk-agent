@@ -65,6 +65,43 @@ graph TD
 detected nothing to do (e.g. the work already landed in a prior
 commit). The orchestrator stops here and does not open an empty PR.
 
+## Telemetry events
+
+Each lifecycle transition appends one JSON line to
+`.afk/logs/events.ndjson`. The dashboard reads this stream; downstream
+analytics can too.
+
+```mermaid
+flowchart TB
+  orch_start([orchestrator_start]) --> spawn[runner_spawn]
+  spawn --> issue_start[issue_start]
+  issue_start --> phase_loop{for each phase}
+  phase_loop --> phase_start[phase_start]
+  phase_start --> agent[agent_spawn]
+  agent --> phase_end[phase_end<br/>outcome=COMPLETE / NO_CHANGES / BLOCKED<br/>+ duration_s + rc]
+  phase_end --> phase_loop
+  phase_loop -->|done| issue_end[issue_end<br/>rc=…]
+  issue_end --> reap[runner_reap<br/>rc=…]
+  reap -->|more queued?| spawn
+  reap -->|empty| orch_exit([orchestrator_exit<br/>reason=normal | trap])
+```
+
+| `kind`              | emitted by         | key fields                                          |
+| ------------------- | ------------------ | --------------------------------------------------- |
+| `orchestrator_start`| `orchestrate.sh`   | `max_parallel`, `tracker`, `repo`                   |
+| `orchestrator_exit` | `orchestrate.sh`   | `reason` (`normal` or `trap`)                       |
+| `runner_spawn`      | `orchestrate.sh`   | `issue`, `runner_pid`                               |
+| `runner_reap`       | `orchestrate.sh`   | `issue`, `runner_pid`, `rc`                         |
+| `issue_start`       | `run-issue.sh`     | `issue`                                             |
+| `issue_end`         | `run-issue.sh`     | `issue`, `rc`                                       |
+| `phase_start`       | `run-phase.sh`     | `issue`, `phase`, `branch`, `cwd`, `log`, `run_id`  |
+| `agent_spawn`       | `run-phase.sh`     | `issue`, `phase`, `agent_pid`, `agent_bin`          |
+| `phase_end`         | `run-phase.sh`     | `issue`, `phase`, `outcome`, `rc`, `duration_s`, `log`, `run_id` |
+
+Reserved auto-injected fields: `ts` (ISO 8601), `ts_epoch` (float),
+`kind`, `scope`, `pid`. See [DASHBOARD.md](./DASHBOARD.md) for the
+consumer-side `/api/events` endpoint.
+
 ## Daily commands
 
 ```bash
@@ -85,6 +122,10 @@ commit). The orchestrator stops here and does not open an empty PR.
 
 # Snapshot of in-flight state
 .afk/scripts/afk status
+
+# Live web dashboard at http://127.0.0.1:8765 (read-only)
+.afk/scripts/afk dashboard --background
+.afk/scripts/afk dashboard --stop
 
 # Silence any active wake-up alarm
 .afk/scripts/afk stop-notify
