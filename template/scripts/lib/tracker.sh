@@ -128,7 +128,7 @@ afk::tracker::open_afk_children() {
         --jq '.[] | "\(.number)\t\(.title)"'
       ;;
     gitlab)
-      glab issue list -R "$REPO" --state opened --label "$lbl" \
+      glab issue list -R "$REPO" --label "$lbl" \
         --per-page 200 --output json \
         | jq -r '.[] | "\(.iid)\t\(.title)"'
       ;;
@@ -144,7 +144,7 @@ afk::tracker::open_afk_prds() {
         --limit 100 --json number --jq '.[].number'
       ;;
     gitlab)
-      glab issue list -R "$REPO" --state opened --label "$lbl" \
+      glab issue list -R "$REPO" --label "$lbl" \
         --per-page 100 --output json | jq -r '.[].iid'
       ;;
   esac
@@ -205,7 +205,7 @@ afk::tracker::pr_list_for_branch() {
         --json number --jq '.[0].number // empty' 2>/dev/null
       ;;
     gitlab)
-      glab mr list -R "$REPO" --source-branch "$branch" --state opened \
+      glab mr list -R "$REPO" --source-branch "$branch" \
         --output json 2>/dev/null | jq -r '.[0].iid // empty'
       ;;
   esac

@@ -409,7 +409,7 @@ def tracker_pr_for_branch(repo: str, tracker: str, branch: str) -> dict[str, Any
     if tracker == "gitlab":
         rc, out, err = run_cmd(
             ["glab", "mr", "list", "-R", repo, "--source-branch", branch,
-             "--state", "opened", "--output", "json"], timeout=15.0,
+             "--output", "json"], timeout=15.0,
         )
     else:
         rc, out, err = run_cmd(
