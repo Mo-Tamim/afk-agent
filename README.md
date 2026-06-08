@@ -9,11 +9,11 @@ genuinely needs a human.
 Works with any IDE/agent that supports the
 [skills.sh](https://www.skills.sh/) standard — Cursor, Claude Code, Codex,
 GitHub Copilot, Windsurf, Gemini, Cline, etc. — and any tracker that
-supports the [`gh`](https://cli.github.com/) or
-[`glab`](https://gitlab.com/gitlab-org/cli) CLI.
+supports the `[gh](https://cli.github.com/)` or
+`[glab](https://gitlab.com/gitlab-org/cli)` CLI.
 
 > Heavily inspired by
-> [`mattpocock/skills/setup-matt-pocock-skills`](https://www.skills.sh/mattpocock/skills/setup-matt-pocock-skills)
+> `[mattpocock/skills/setup-matt-pocock-skills](https://www.skills.sh/mattpocock/skills/setup-matt-pocock-skills)`
 > and battle-tested on real monorepos before being abstracted.
 
 ## Table of contents
@@ -31,8 +31,8 @@ supports the [`gh`](https://cli.github.com/) or
 - [Design principles](#design-principles)
 - [Scenarios — when things go sideways](#scenarios--when-things-go-sideways)
   - [Orchestrator was terminated (crash, reboot, Ctrl-C)](#scenario-orchestrator-was-terminated-crash-reboot-ctrl-c)
-  - [Issue tagged `afk-blocked`](#scenario-issue-tagged-afk-blocked)
-  - [Issue tagged `needs-human`](#scenario-issue-tagged-needs-human)
+  - [Issue tagged `afk-blocked](#scenario-issue-tagged-afk-blocked)`
+  - [Issue tagged `needs-human](#scenario-issue-tagged-needs-human)`
   - [Merge conflict on the PR](#scenario-merge-conflict-on-the-pr)
   - [CI keeps going red](#scenario-ci-keeps-going-red)
   - [Agent runner died mid-phase (auth, network, OOM)](#scenario-agent-runner-died-mid-phase-auth-network-oom)
@@ -78,6 +78,8 @@ graph LR
   Orchestrator -->|commits to| Repo
 ```
 
+
+
 > **Two ways to run.** Every command shown below works **inside your
 > IDE chat** (Cursor / Copilot / Claude / Codex / Windsurf / Gemini)
 > via the `/afk-run` skill, OR **in a terminal**. Pick whichever
@@ -87,11 +89,13 @@ graph LR
 ## Features
 
 ### End-to-end automation
+
 - **PRD → child issues → branches → PRs → CI → self-review → squash-merge → docs PR**, all unattended.
 - **Auto-rebase** children onto fresh `origin/main` as siblings merge.
 - **Auto-generated dev + user docs** (with mermaid) once the last child of a PRD closes.
 
 ### Safety & resumability
+
 - **Sentinel-only contract.** The agent's last word — `COMPLETE` / `NO_CHANGES` / `BLOCKED` — is the only thing bash inspects. No prose parsing, no hallucinated state.
 - **Resume-safe.** Ctrl-C, crash, or reboot mid-phase resumes at the first not-completed phase via `.afk/state/issue-<N>.json`.
 - **Per-issue git worktrees.** Parallel agents never fight over `HEAD`.
@@ -99,20 +103,24 @@ graph LR
 - **Idempotent tracker layer.** The PR phase reuses an existing open PR; the merge phase short-circuits if the PR is already `MERGED`.
 
 ### Tooling abstraction
+
 - **Tracker-agnostic.** GitHub (`gh`) and GitLab (`glab`) behind the same verbs; adding Forgejo / Gitea / Linear is one `case` arm in `lib/tracker.sh`.
 - **Agent-agnostic.** `cursor-agent`, `claude`, `codex`, `gh copilot`, `gemini`, or any stdin-driven CLI — swap by editing `agent_bin` in `.afk/config.yml`. No script changes.
 - **IDE-agnostic.** Anything that supports [skills.sh](https://www.skills.sh/) — Cursor, Claude Code, Copilot Chat, Codex, Windsurf, Gemini, Cline.
 
 ### Observability
+
 - **Live web dashboard** at `http://127.0.0.1:8765` — orchestrator status, per-issue phase pipeline, live log tail, worktrees, PR/CI badges. Stdlib-only Python, no `pip install`. See [docs/DASHBOARD.md](./docs/DASHBOARD.md).
 - **Structured telemetry.** Every lifecycle transition (`orchestrator_start`, `phase_start`, `agent_spawn`, `phase_end`, …) appends one JSON line to `.afk/logs/events.ndjson` — consumable by the dashboard or any custom downstream.
 - **Atomic state files.** `.afk/state/issue-<N>.json` updated via `jq → tempfile → mv` after every phase, so a crash never leaves half-written state.
 
 ### Wake-up only when needed
-- Audible alarm via the [`notify-developer`](https://www.skills.sh/) skill on `BLOCKED`, CI red past `ci_max_wait_seconds`, merge-gate hit, or `issue_timeout_seconds` exceeded.
+
+- Audible alarm via the `[notify-developer](https://www.skills.sh/)` skill on `BLOCKED`, CI red past `ci_max_wait_seconds`, merge-gate hit, or `issue_timeout_seconds` exceeded.
 - Alarm silences itself on the next agent turn — no manual mute.
 
 ### Zero-friction install
+
 - `npx skills add Mo-Tamim/afk-agent` for the skills (once per machine).
 - `./install.sh` for the `.afk/` scaffold (once per repo) — local or global scope.
 - One JSON config file (`.afk/config.yml`) holds every knob.
@@ -141,10 +149,12 @@ sequenceDiagram
   AFK->>Dev: notify-developer (only on blockers / merge gate / timeouts)
 ```
 
+
+
 ## Quick start (5 minutes)
 
 For the full hand-holding guide, jump to
-[**docs/WORKFLOW.md**](./docs/WORKFLOW.md) — it walks you through
+**[docs/WORKFLOW.md](./docs/WORKFLOW.md)** — it walks you through
 every step with mermaid diagrams and "what you'll see" callouts.
 Here's the tl;dr:
 
@@ -230,6 +240,8 @@ flowchart TB
   Pool -.->|emits events.ndjson<br/>+ state files| DB[afk dashboard\nlive web view]
 ```
 
+
+
 See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for the full
 breakdown of phases, sentinels, and resume semantics, and
 [docs/DASHBOARD.md](./docs/DASHBOARD.md) for the dashboard.
@@ -275,49 +287,50 @@ afk-agent/
 
 ## Where to read next
 
-| If you want to…                              | Read                                                |
-|----------------------------------------------|-----------------------------------------------------|
-| See a hand-held walkthrough start-to-end     | [docs/WORKFLOW.md](./docs/WORKFLOW.md)              |
-| Decide chat-mode vs terminal-mode            | [docs/MODES.md](./docs/MODES.md)                    |
-| Look up a term or abbreviation               | [docs/GLOSSARY.md](./docs/GLOSSARY.md)              |
-| Understand the architecture                  | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)      |
-| Reference the phase lifecycle quickly        | [docs/LIFECYCLE.md](./docs/LIFECYCLE.md)            |
-| Watch progress live in a browser             | [docs/DASHBOARD.md](./docs/DASHBOARD.md)            |
-| Install on a different agent / tracker       | [docs/INSTALLATION.md](./docs/INSTALLATION.md)      |
-| Add a new tracker, phase, or skill           | [docs/EXTENDING.md](./docs/EXTENDING.md)            |
-| Publish your fork to skills.sh               | [docs/PUBLISHING.md](./docs/PUBLISHING.md)          |
+
+| If you want to…                          | Read                                           |
+| ---------------------------------------- | ---------------------------------------------- |
+| See a hand-held walkthrough start-to-end | [docs/WORKFLOW.md](./docs/WORKFLOW.md)         |
+| Decide chat-mode vs terminal-mode        | [docs/MODES.md](./docs/MODES.md)               |
+| Look up a term or abbreviation           | [docs/GLOSSARY.md](./docs/GLOSSARY.md)         |
+| Understand the architecture              | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) |
+| Reference the phase lifecycle quickly    | [docs/LIFECYCLE.md](./docs/LIFECYCLE.md)       |
+| Watch progress live in a browser         | [docs/DASHBOARD.md](./docs/DASHBOARD.md)       |
+| Install on a different agent / tracker   | [docs/INSTALLATION.md](./docs/INSTALLATION.md) |
+| Add a new tracker, phase, or skill       | [docs/EXTENDING.md](./docs/EXTENDING.md)       |
+| Publish your fork to skills.sh           | [docs/PUBLISHING.md](./docs/PUBLISHING.md)     |
+
 
 ## Design principles
 
 - **Skill-native.** Every behavior the agent needs is in a `SKILL.md`
-  with frontmatter. Prompts reference skills by name; the agent loads
-  them on demand. No giant system prompts.
+with frontmatter. Prompts reference skills by name; the agent loads
+them on demand. No giant system prompts.
 - **Sentinel-driven.** Each phase ends with exactly one of
-  `<promise>COMPLETE</promise>`, `<promise>NO_CHANGES</promise>`, or
-  `<promise>BLOCKED</promise>`. The bash orchestrator never inspects
-  the agent's prose — only the sentinel.
+`<promise>COMPLETE</promise>`, `<promise>NO_CHANGES</promise>`, or
+`<promise>BLOCKED</promise>`. The bash orchestrator never inspects
+the agent's prose — only the sentinel.
 - **Resume-safe.** Phase completion is recorded in
-  `.afk/state/issue-<N>.json`. A crash, reboot, or `Ctrl-C` resumes at
-  the next incomplete phase. Idempotent at the tracker layer.
-- **Worktree-isolated.** Each in-flight issue gets its own `git
-  worktree` under `.afk/worktrees/`, so parallel agents never fight
-  over `HEAD`.
+`.afk/state/issue-<N>.json`. A crash, reboot, or `Ctrl-C` resumes at
+the next incomplete phase. Idempotent at the tracker layer.
+- **Worktree-isolated.** Each in-flight issue gets its own `git worktree` under `.afk/worktrees/`, so parallel agents never fight
+over `HEAD`.
 - **Tracker-agnostic.** A thin `tracker.sh` wraps `gh` and `glab`
-  behind the same verbs. Prompts speak "issue", "PR", "default branch"
-  — never "GitHub-specific" things.
+behind the same verbs. Prompts speak "issue", "PR", "default branch"
+— never "GitHub-specific" things.
 - **Agent-agnostic.** The orchestrator shells out to `$AGENT_BIN`, set
-  in `config.yml`. Swap `cursor-agent` for `claude` / `codex` /
-  `gh copilot` without editing scripts.
+in `config.yml`. Swap `cursor-agent` for `claude` / `codex` /
+`gh copilot` without editing scripts.
 - **Wake-up only when needed.** The agent never loops silently on a
-  hard block — it triggers
-  [`notify-developer`](https://www.skills.sh/) or the configured
-  equivalent and stops.
+hard block — it triggers
+`[notify-developer](https://www.skills.sh/)` or the configured
+equivalent and stops.
 - **Observability for free.** Every phase boundary, runner spawn,
-  and agent invocation appends one JSON line to
-  `.afk/logs/events.ndjson`. The
-  [live web dashboard](./docs/DASHBOARD.md) consumes that stream
-  plus the on-disk state files — no agents instrumented, no extra
-  daemons, no databases.
+and agent invocation appends one JSON line to
+`.afk/logs/events.ndjson`. The
+[live web dashboard](./docs/DASHBOARD.md) consumes that stream
+plus the on-disk state files — no agents instrumented, no extra
+daemons, no databases.
 
 ## Scenarios — when things go sideways
 
@@ -414,7 +427,7 @@ rm -f .afk/state/issue-<N>.lock
 .afk/scripts/afk issue <N>
 ```
 
-Cursor-agent `Connection lost, reconnecting…` loops are usually transient — wait ~5 min before intervening; the retry typically succeeds and the phase completes normally.
+Cursor-agent `Connection lost, reconnecting…` loops are usually transient — wait ~5 min before intervening; the retry typically succeeds and the phase completes normall/reauy.
 
 ### Scenario: Dashboard says "port already in use"
 
