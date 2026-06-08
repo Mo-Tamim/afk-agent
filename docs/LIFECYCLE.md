@@ -50,9 +50,9 @@ flowchart TD
 
 ```mermaid
 graph TD
-  classDef good fill:#dfd,stroke:#080;
-  classDef neut fill:#ffd,stroke:#a80;
-  classDef bad  fill:#fdd,stroke:#a00;
+  classDef good fill:#dfd,stroke:#166534,color:#0f172a,stroke-width:1.5px;
+  classDef neut fill:#ffd,stroke:#92400e,color:#0f172a,stroke-width:1.5px;
+  classDef bad  fill:#fdd,stroke:#991b1b,color:#0f172a,stroke-width:1.5px;
 
   A[Agent finishes phase] --> B{Last sentinel?}
   B -->|COMPLETE| good[Record completed_phase<br/>Advance to next phase]:::good

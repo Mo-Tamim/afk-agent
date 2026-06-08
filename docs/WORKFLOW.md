@@ -17,10 +17,10 @@ If a word here is new to you, check the [glossary](./GLOSSARY.md).
 
 ```mermaid
 flowchart TD
-  classDef once  fill:#e8f4ff,stroke:#08a;
-  classDef repo  fill:#fff4d6,stroke:#a80;
-  classDef prd   fill:#e7ffd6,stroke:#080;
-  classDef wait  fill:#f5e6ff,stroke:#80a;
+  classDef once  fill:#e8f4ff,stroke:#0369a1,color:#0f172a,stroke-width:1.5px;
+  classDef repo  fill:#fff4d6,stroke:#92400e,color:#0f172a,stroke-width:1.5px;
+  classDef prd   fill:#e7ffd6,stroke:#166534,color:#0f172a,stroke-width:1.5px;
+  classDef wait  fill:#f5e6ff,stroke:#6b21a8,color:#0f172a,stroke-width:1.5px;
 
   S0[0. Install the skills<br/>npx skills add Mo-Tamim/afk-agent]:::once
   S1[1. Scaffold the orchestrator<br/>/afk-setup in chat<br/>OR ./install.sh in terminal]:::repo
@@ -540,7 +540,7 @@ The orchestrator will **wake you up** only when:
 
 ```mermaid
 flowchart LR
-  classDef alarm fill:#ffe0e0,stroke:#a00;
+  classDef alarm fill:#ffe0e0,stroke:#991b1b,color:#0f172a,stroke-width:1.5px;
   E1[A phase emitted BLOCKED]:::alarm
   E2[CI stayed red past ci_max_wait_seconds]:::alarm
   E3[merge_mode=gated and a PR is ready]:::alarm
