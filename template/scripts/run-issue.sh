@@ -45,7 +45,8 @@ afk::require jq git "$AFK_TRACKER_CLI"
 if ! afk::lock_acquire "$ISSUE"; then
   afk::die "issue $ISSUE is already locked by another runner; refusing to double-process"
 fi
-trap 'afk::lock_release "'"$ISSUE"'"' EXIT
+trap 'rc=$?; afk::lock_release "'"$ISSUE"'"; afk::telemetry::emit issue_end issue "'"$ISSUE"'" rc "$rc"' EXIT
+afk::telemetry::emit issue_start issue "$ISSUE"
 
 # === Verify the issue is in a runnable state =================================
 

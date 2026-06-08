@@ -107,6 +107,61 @@ afk::notify_stop() {
   fi
 }
 
+# Append a structured event to .afk/logs/events.ndjson.
+#
+# This is the on-disk telemetry stream the dashboard consumes. The format
+# is one JSON object per line, opt-in for the dashboard but tolerated by
+# every other script (we never read this file from bash).
+#
+# Args: <kind> [k1 v1] [k2 v2] ...
+#
+# Reserved fields injected automatically:
+#   ts       — UTC ISO 8601 with millis
+#   ts_epoch — float seconds since epoch (cheap to filter on)
+#   kind     — first argument
+#   scope    — $AFK_SCOPE if set (otherwise "afk")
+#   pid      — emitting bash PID
+#
+# Best-effort: any failure (jq missing, disk full, file locked, …) is
+# silenced. Telemetry MUST NOT change script behavior.
+afk::telemetry::emit() {
+  local kind="${1:-event}"; shift || true
+  local file="$AFK_LOGS/events.ndjson"
+  [[ -d "$AFK_LOGS" ]] || return 0
+
+  local ts ts_epoch
+  ts="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)"
+  ts_epoch="$(date +%s.%N 2>/dev/null || date +%s)"
+
+  # Prefer jq for safety (proper escaping), fall back to hand-rolled JSON.
+  if command -v jq >/dev/null 2>&1; then
+    local -a jq_args=(-n -c
+      --arg ts "$ts" --arg ts_epoch "$ts_epoch"
+      --arg kind "$kind" --arg scope "${AFK_SCOPE:-afk}" --arg pid "$$")
+    local jq_obj='{ts:$ts, ts_epoch:($ts_epoch|tonumber? // null), kind:$kind, scope:$scope, pid:($pid|tonumber)}'
+    while (( $# >= 2 )); do
+      local k="$1" v="$2"; shift 2
+      jq_args+=(--arg "kv_$k" "$v")
+      jq_obj+=" | .[\"$k\"] = \$kv_$k"
+    done
+    jq "${jq_args[@]}" "$jq_obj" >> "$file" 2>/dev/null || true
+  else
+    # Hand-rolled fallback. Only handles simple scalars; complex strings
+    # may produce invalid JSON, which the dashboard parses leniently
+    # (drops bad lines).
+    local kvs=""
+    while (( $# >= 2 )); do
+      local k="$1" v="$2"; shift 2
+      v="${v//\\/\\\\}"; v="${v//\"/\\\"}"
+      v="${v//$'\n'/\\n}"; v="${v//$'\t'/\\t}"
+      kvs+=",\"$k\":\"$v\""
+    done
+    printf '{"ts":"%s","ts_epoch":%s,"kind":"%s","scope":"%s","pid":%s%s}\n' \
+      "$ts" "$ts_epoch" "$kind" "${AFK_SCOPE:-afk}" "$$" "$kvs" \
+      >> "$file" 2>/dev/null || true
+  fi
+}
+
 # Slug helper: title → kebab, lowercase, ascii, ≤ 50 chars.
 afk::slug() {
   printf '%s' "$1" \
