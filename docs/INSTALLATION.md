@@ -1,10 +1,16 @@
 # Installation
 
+> Looking for the **complete walkthrough**? Start at
+> [docs/WORKFLOW.md](./WORKFLOW.md). This file is the install-only
+> reference. For the chat-vs-terminal decision, see
+> [docs/MODES.md](./MODES.md). For unfamiliar terms, see
+> [docs/GLOSSARY.md](./GLOSSARY.md).
+
 Two pieces install separately, on purpose:
 
-1. **The skills** — `afk-grill`, `afk-prd`, `afk-setup`, plus the seven
-   internal skills the orchestrator references. Installed once per
-   machine via [skills.sh](https://www.skills.sh/) or per project.
+1. **The skills** — `afk-grill`, `afk-prd`, `afk-setup`, `afk-run`,
+   plus the six internal skills the orchestrator references. Installed
+   once per machine via [skills.sh](https://www.skills.sh/) or per project.
 2. **The orchestrator scaffold** (`.afk/` directory) — installed once
    per repo by the `/afk-setup` skill or `./install.sh`.
 
@@ -217,3 +223,21 @@ echo "Say hello." | <your-runner> <your-flags>
 ```
 
 If you can see "Hello" on stdout, the orchestrator can drive it.
+
+## 7. Choosing chat-window vs terminal
+
+After installing, you have four ways to run AFK. They all share state
+on disk, so you can mix and match freely:
+
+- **Chat-inline** — invoke `/afk-run …` in your IDE chat; everything
+  streams back to chat.
+- **Chat-detached** — `/afk-run` spawns the orchestrator into the
+  background so chat closing doesn't kill it.
+- **Terminal-foreground** — `.afk/scripts/afk issue N` or
+  `.afk/scripts/afk run --once` in a shell.
+- **Terminal-background** —
+  `setsid nohup .afk/scripts/afk run > .afk/logs/orchestrator.log 2>&1 &`
+  for truly unattended overnight runs.
+
+The decision tree, pros/cons, and per-IDE notes live in
+[docs/MODES.md](./MODES.md).

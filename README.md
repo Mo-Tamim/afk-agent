@@ -20,12 +20,13 @@ supports the [`gh`](https://cli.github.com/) or
 
 ```mermaid
 graph LR
-  subgraph User_skills["User-facing skills (you invoke these)"]
+  subgraph User_skills["User-facing skills (you invoke these from chat)"]
     G[afk-grill]
     P[afk-prd]
     S[afk-setup]
+    R[afk-run]
   end
-  subgraph AFK_skills["AFK internal skills (the orchestrator invokes these)"]
+  subgraph AFK_skills["AFK internal skills (the orchestrator loads on demand)"]
     W[afk-workflow]
     D[afk-decompose]
     T[afk-tdd]
@@ -42,11 +43,18 @@ graph LR
   G -->|writes ADRs + CONTEXT.md| Repo[(Your repo)]
   P -->|publishes PRD issue| Tracker[(GitHub / GitLab)]
   S -->|scaffolds| Scaffold
+  R -->|drives from chat| Scaffold
   Scaffold -->|drives| Orchestrator{{afk orchestrator}}
   Orchestrator -->|reads| AFK_skills
   Orchestrator -->|reads/writes| Tracker
   Orchestrator -->|commits to| Repo
 ```
+
+> **Two ways to run.** Every command shown below works **inside your
+> IDE chat** (Cursor / Copilot / Claude / Codex / Windsurf / Gemini)
+> via the `/afk-run` skill, OR **in a terminal**. Pick whichever
+> feels natural — they share the same state on disk. See
+> [docs/MODES.md](./docs/MODES.md) for the run-mode decision tree.
 
 ## The three-step user flow
 
@@ -72,54 +80,67 @@ sequenceDiagram
   AFK->>Dev: notify-developer (only on blockers / merge gate / timeouts)
 ```
 
-## Quick start
+## Quick start (5 minutes)
 
-### 1. Install the skills
+For the full hand-holding guide, jump to
+[**docs/WORKFLOW.md**](./docs/WORKFLOW.md) — it walks you through
+every step with mermaid diagrams and "what you'll see" callouts.
+Here's the tl;dr:
+
+### 1. Install the skills (once per machine)
 
 ```bash
 npx skills add Mo-Tamim/afk-agent
 ```
 
-This registers every `afk-*` skill with your agent runtime (Cursor,
-Claude Code, etc.). See [docs/INSTALLATION.md](./docs/INSTALLATION.md)
-for per-agent details and global vs. local install.
+Registers all 10 `afk-*` skills with your agent runtime. See
+[docs/INSTALLATION.md](./docs/INSTALLATION.md) for per-agent details
+and the global vs. local install choice.
 
-### 2. Scaffold the orchestrator into your repo
+### 2. Scaffold the orchestrator (once per repo)
 
-From inside your project, ask your agent:
+**From chat:**
 
 ```
 /afk-setup
 ```
 
-It will interview you about:
+The agent interviews you (tracker, agent runner, merge mode), shows
+you the resolved config, then scaffolds `.afk/` for you.
 
-- **Issue tracker** — GitHub (`gh`) or GitLab (`glab`)
-- **Repo slug** — e.g. `acme/widget` or `acme/widget` (GitLab path)
-- **Default branch** — auto-detected from `origin/HEAD`, override if needed
-- **Agent runner binary** — `cursor-agent`, `claude`, `codex`, `gh copilot`, …
-- **Parallelism cap** — default 3
-- **Merge mode** — `auto` (merge on green CI) or `gated` (wait for `/merge`)
-
-…then writes `.afk/config.yml`, `.afk/labels.yml`, the prompts, the
-templates, the scripts, and an `## AFK orchestrator` block in your
-repo's `AGENTS.md` (or `CLAUDE.md` / `.cursorrules`).
-
-You can also run it non-interactively:
+**Or from terminal:**
 
 ```bash
-./install.sh --tracker github --repo acme/widget --runner cursor-agent
+./install.sh                        # interactive prompts
+# or fully non-interactive:
+./install.sh --tracker github --repo acme/widget \
+             --runner cursor-agent --merge-mode auto
 ```
 
-### 3. Drive a PRD AFK
+### 3. Drive a PRD AFK (once per PRD)
+
+**From chat (all four commands):**
+
+```
+/afk-grill <your design idea>           # stress-test → ADRs
+/afk-prd                                 # synthesize PRD on tracker
+/afk-run decompose <PRD#>                # PRD → child issues
+/afk-run process all children of <PRD#>  # orchestrator, inline
+```
+
+**Or from terminal:**
 
 ```bash
-# Once your tracker has a PRD issue labelled afk-prd, ready-for-agent:
-.afk/scripts/afk decompose 42         # PRD #42 → N child issues
-.afk/scripts/afk run                  # background orchestrator, parallel
-.afk/scripts/afk status               # snapshot of every in-flight issue
-.afk/scripts/afk stop-notify          # silence any wake-up alarm
+# Steps 1–2 still happen in chat. After /afk-prd:
+.afk/scripts/afk decompose 42       # PRD #42 → N child issues
+.afk/scripts/afk run                # background orchestrator (parallel)
+.afk/scripts/afk status             # snapshot of every in-flight issue
+.afk/scripts/afk stop-notify        # silence any wake-up alarm
 ```
+
+For the chat-vs-terminal decision and how to fully detach the
+orchestrator from chat for long runs, see
+[docs/MODES.md](./docs/MODES.md).
 
 ## Architecture in one diagram
 
@@ -154,9 +175,10 @@ afk-agent/
 ├── install.sh                     ← non-interactive scaffolder
 ├── package.json                   ← skills.sh metadata
 ├── skills/                        ← published skills (skills.sh discoverable)
-│   ├── afk-setup/SKILL.md
-│   ├── afk-grill/SKILL.md
-│   ├── afk-prd/SKILL.md
+│   ├── afk-setup/SKILL.md          ← /afk-setup
+│   ├── afk-grill/SKILL.md          ← /afk-grill
+│   ├── afk-prd/SKILL.md            ← /afk-prd
+│   ├── afk-run/SKILL.md            ← /afk-run  (chat-window driver)
 │   ├── afk-workflow/SKILL.md
 │   ├── afk-decompose/SKILL.md
 │   ├── afk-tdd/SKILL.md
@@ -172,12 +194,28 @@ afk-agent/
 │   └── scripts/                   ← orchestrator (bash)
 │       └── lib/                   ← common helpers + tracker abstraction
 └── docs/
+    ├── WORKFLOW.md                 ← READ THIS FIRST
+    ├── MODES.md                    ← chat vs terminal vs hybrid
+    ├── GLOSSARY.md                 ← every term & abbreviation
     ├── ARCHITECTURE.md
     ├── LIFECYCLE.md
     ├── INSTALLATION.md
     ├── EXTENDING.md
     └── PUBLISHING.md
 ```
+
+## Where to read next
+
+| If you want to…                              | Read                                                |
+|----------------------------------------------|-----------------------------------------------------|
+| See a hand-held walkthrough start-to-end     | [docs/WORKFLOW.md](./docs/WORKFLOW.md)              |
+| Decide chat-mode vs terminal-mode            | [docs/MODES.md](./docs/MODES.md)                    |
+| Look up a term or abbreviation               | [docs/GLOSSARY.md](./docs/GLOSSARY.md)              |
+| Understand the architecture                  | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)      |
+| Reference the phase lifecycle quickly        | [docs/LIFECYCLE.md](./docs/LIFECYCLE.md)            |
+| Install on a different agent / tracker       | [docs/INSTALLATION.md](./docs/INSTALLATION.md)      |
+| Add a new tracker, phase, or skill           | [docs/EXTENDING.md](./docs/EXTENDING.md)            |
+| Publish your fork to skills.sh               | [docs/PUBLISHING.md](./docs/PUBLISHING.md)          |
 
 ## Design principles
 

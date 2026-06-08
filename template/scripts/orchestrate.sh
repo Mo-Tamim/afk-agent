@@ -2,8 +2,18 @@
 # Parallel orchestrator. Picks unblocked AFK child issues from the tracker
 # and runs them concurrently up to `max_parallel`.
 #
+# Design notes:
+#   • The pool is just a `&` job set guarded by a bash associative array
+#     (PID → issue#). No external coordinator. No daemon.
+#   • Picking is *pull-based*: every time a slot opens we re-query the
+#     tracker for the next ready+unblocked child. This means picks reflect
+#     fresh tracker state (e.g. a blocker just closed) on every cycle.
+#   • Per-issue locking lives in lib/lock.sh, not here. Multiple `afk run`
+#     processes can race on the same issue and the noclobber-redirect
+#     lock guarantees only one wins.
+#
 # Usage:
-#   orchestrate.sh                # process every ready child issue
+#   orchestrate.sh                # process every ready child issue, forever
 #   orchestrate.sh --once         # one batch then exit (CI-friendly)
 #   orchestrate.sh --prd <N>      # only children of PRD #N
 
@@ -17,9 +27,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AFK_SCOPE="orchestrate"
 afk::require jq git "$AFK_TRACKER_CLI"
 
-# Verify the agent runner exists; without it the runners would all crash.
+# Pre-flight the agent runner — every spawned issue runner would otherwise
+# crash with a less helpful error mid-phase.
 AGENT_BIN="$(afk::config agent_bin cursor-agent)"
 afk::require "$AGENT_BIN"
+
+# === Args ====================================================================
 
 ONCE=0
 PRD_FILTER=""
@@ -38,12 +51,10 @@ READY_LBL="$(afk::config_nested labels ready_for_agent ready-for-agent)"
 BLOCKED_LBL="$(afk::config_nested labels blocked       afk-blocked)"
 HUMAN_LBL="$(afk::config_nested labels needs_human     needs-human)"
 
-# Pick the next batch of issues that:
-#  - are open
-#  - have label afk-child
-#  - have label ready-for-agent (not in-progress, not blocked)
-#  - have all blockers closed
-#  - if PRD_FILTER is set, mention the PRD in their body
+# === Batch picker ============================================================
+# Returns the unblocked, ready, non-human-required, non-locked issues, in
+# tracker order. We then take the first one (the next slot's pick).
+
 afk::pick_batch() {
   local -a candidates=()
   while IFS=$'\t' read -r n title; do
@@ -55,6 +66,8 @@ afk::pick_batch() {
     [[ "$labels" == *"$BLOCKED_LBL"* ]] && continue
     [[ "$labels" == *"$HUMAN_LBL"* ]] && continue
     if [[ -n "$PRD_FILTER" ]]; then
+      # Body grep is approximate; the orchestrator only uses this for
+      # filtering — the per-issue `Blocked by:` parser is precise.
       local body
       case "$TRACKER" in
         github) body="$(gh   issue view "$n" -R "$REPO" --json body --jq '.body')" ;;
@@ -68,7 +81,11 @@ afk::pick_batch() {
   printf '%s\n' "${candidates[@]}"
 }
 
-# Track child PIDs and the issue each one is processing.
+# === Pool bookkeeping ========================================================
+# Bash associative array of PID → issue#. `declare -A x=()` is intentional —
+# without an explicit assignment, `${#x[@]}` is unsafe under `set -u` on
+# some bash builds.
+
 declare -A INFLIGHT=()
 
 reap_one() {
@@ -82,6 +99,8 @@ reap_one() {
 }
 
 reap_any() {
+  # Sweep all known PIDs; remove the dead ones. Lighter-weight than `wait -n`
+  # for the "check before starting new work" path.
   local pid
   for pid in "${!INFLIGHT[@]}"; do
     if ! kill -0 "$pid" 2>/dev/null; then
@@ -89,6 +108,11 @@ reap_any() {
     fi
   done
 }
+
+# === Main loop ===============================================================
+# Fill the pool → wait for something to finish → repeat.
+# Empty queue + empty pool → run the docs-gate scan, then sleep (or exit
+# if --once).
 
 while :; do
   reap_any
@@ -104,13 +128,15 @@ while :; do
   if (( ${#INFLIGHT[@]} == 0 )); then
     afk::log "no work in flight and queue empty"
     if (( ONCE )); then break; fi
-    # Check the docs gate before sleeping.
+    # Opportunistic: every idle pass, check if any PRD is ready to document.
     "$SCRIPT_DIR/document-gate.sh" || afk::warn "docs gate scan failed"
     sleep 60
     continue
   fi
 
-  # Wait for at least one to finish, then loop and refill.
+  # Block until at least one runner finishes, then loop and refill.
+  # `wait -n` waits for any background job; rc is ignored — we read it
+  # per-PID in reap_any/reap_one.
   wait -n 2>/dev/null || true
   reap_any
 done

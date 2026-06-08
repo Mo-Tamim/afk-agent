@@ -31,8 +31,19 @@ contents into the prompt — load on demand.
 ```bash
 .afk/scripts/afk setup            # one-time: create labels, sanity-check
 .afk/scripts/afk decompose <PRD#> # PRD → child issues
-.afk/scripts/afk run              # bounded-parallelism orchestrator
+.afk/scripts/afk run              # bounded-parallelism orchestrator (long-running)
+.afk/scripts/afk run --once       # process current queue then exit
 .afk/scripts/afk issue <N>        # drive one child end-to-end
 .afk/scripts/afk status           # snapshot of every in-flight issue
 .afk/scripts/afk stop-notify      # silence any active wake-up alarm
 ```
+
+### Driving from chat
+
+If the active session is an interactive chat (Cursor sidebar, Copilot
+Chat, Claude Code, …), prefer the `/afk-run` skill — it wraps the same
+commands above, but knows how to interpret sentinels for the user and
+how to spawn a long `afk run` detached when the chat tool's time limit
+isn't enough. The skill is at `.afk/skills/afk-run/SKILL.md`.
+
+If the session is a terminal or CI, use the bash commands directly.

@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
 # Per-issue state JSON, atomically updated.
+#
+# Atomicity model: every mutator reads → transforms via jq into a
+# temp file → mv. mv is atomic on POSIX filesystems, so a concurrent
+# reader either sees the old file or the new one, never a half-written
+# one. Combined with the per-issue lock (lib/lock.sh), this means we
+# don't need flock or any other coordination primitive.
+#
 # Schema:
 #   { "issue": N, "branch": "...", "phase": "implement",
 #     "status": "running"|"done"|"blocked", "pr": null|N,
 #     "started_at": "...", "updated_at": "...", "history": [...],
 #     "completed_phases": [...] }
+#
+# `completed_phases` is the resume cursor — see run-issue.sh comments.
 
 afk::state_path() { printf '%s/issue-%s.json' "$AFK_STATE" "$1"; }
 
@@ -53,7 +62,9 @@ afk::state_phase_clear_completed() {
   mv "$tmp" "$p"
 }
 
-# afk::state_set <issue> <key> <value>
+# Set one key on the issue's state. If <value> parses as JSON we store it
+# as JSON (so `state_set N pr "99"` becomes `.pr = 99` not `.pr = "99"`).
+# Anything that doesn't parse is stored as a string verbatim.
 afk::state_set() {
   local issue="$1" key="$2" value="$3"
   local p; p="$(afk::state_path "$issue")"

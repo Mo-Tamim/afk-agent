@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # `afk` — single entrypoint for the orchestrator.
 #
+# This is a thin dispatcher. Subcommands live in sibling .sh files; the only
+# logic here is help text and the `status` / `stop-notify` shortcuts that
+# don't deserve their own script.
+#
 # Subcommands:
 #   afk setup                     — create labels, sanity-check tools
 #   afk decompose <PRD>           — explode one PRD issue into children
@@ -22,23 +26,22 @@ cmd="${1:-help}"
 shift || true
 
 case "$cmd" in
-  setup)
-    "$SCRIPT_DIR/ensure-setup.sh" "$@"
-    ;;
-  decompose)
-    "$SCRIPT_DIR/decompose.sh" "$@"
-    ;;
-  run)
-    "$SCRIPT_DIR/orchestrate.sh" "$@"
-    ;;
-  issue)
-    "$SCRIPT_DIR/run-issue.sh" "$@"
-    ;;
-  document)
-    "$SCRIPT_DIR/document-gate.sh" "$@"
-    ;;
+  # --- pass-through subcommands ------------------------------------------
+  # Each one is a separate script so it can be invoked directly too (handy
+  # for debugging without going through the dispatcher).
+  setup)         "$SCRIPT_DIR/ensure-setup.sh"   "$@" ;;
+  decompose)     "$SCRIPT_DIR/decompose.sh"      "$@" ;;
+  run)           "$SCRIPT_DIR/orchestrate.sh"    "$@" ;;
+  issue)         "$SCRIPT_DIR/run-issue.sh"      "$@" ;;
+  document)      "$SCRIPT_DIR/document-gate.sh"  "$@" ;;
+
+  # --- inline subcommands (no dedicated script) --------------------------
   status)
+    # Snapshot every in-flight issue's progress. Computed entirely from the
+    # state files — no tracker calls — so it's safe to spam in chat.
     if ls "$AFK_STATE"/issue-*.json >/dev/null 2>&1; then
+      # Keep the phase order in sync with .afk/config.yml::phases. The
+      # `resume_at` column is derived as "first phase not in completed_phases".
       PHASE_ORDER=(plan implement review pr pr_review merge)
       ORDER_JSON="$(printf '%s\n' "${PHASE_ORDER[@]}" | jq -R . | jq -s .)"
       for f in "$AFK_STATE"/issue-*.json; do
@@ -53,12 +56,18 @@ case "$cmd" in
       echo "(no state files)"
     fi
     ;;
+
   stop-notify)
+    # Idempotent — no-op if no alarm script is installed.
     afk::notify_stop
     echo "stopped any running notification alarms"
     ;;
+
+  # --- help / unknown ----------------------------------------------------
   help|--help|-h|"")
-    sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    # Print the header comment block (lines 2..18) verbatim, stripping the
+    # leading '# '. Keeps usage docs in one place.
+    sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     ;;
   *)
     afk::die "unknown command: $cmd  (try: afk help)"

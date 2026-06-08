@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Tracker abstraction — single set of verbs that route to `gh` (GitHub) or
-# `glab` (GitLab) depending on `tracker:` in .afk/config.yml. Sourced by
-# every script that needs to talk to the issue tracker.
+# Tracker abstraction. ONE set of verbs that route to `gh` (GitHub) or
+# `glab` (GitLab) depending on `tracker:` in .afk/config.yml.
 #
-# Public verbs (all take repo from `$REPO` resolved here):
+# Adding a new tracker (Forgejo, Gitea, Linear, …) means adding one new
+# arm to every case statement here — and nothing else in the codebase.
+# Prompts and skills speak abstract verbs; orchestrator scripts call
+# these functions; nothing else knows what `gh` or `glab` is.
+#
+# Public verbs (all take repo from `$REPO` resolved at source time):
 #   afk::tracker::issue_view_json   <N>
 #   afk::tracker::issue_state       <N>
 #   afk::tracker::issue_labels      <N>
@@ -16,7 +20,7 @@
 #   afk::tracker::open_afk_prds              # list "<N>" for open afk-prd issues
 #   afk::tracker::blockers          <N>      # parse `## Blocked by` → blocker issue numbers
 #   afk::tracker::blockers_resolved <N>      # rc=0 iff every blocker is closed
-#   afk::tracker::pr_list_for_branch         <branch>  → "<N>" of first open PR or empty
+#   afk::tracker::pr_list_for_branch <branch> # → "<N>" of first open PR or empty
 #   afk::tracker::pr_view_json      <PR>
 #   afk::tracker::ci_status         <PR>     # GREEN | RED | PENDING | UNKNOWN
 #   afk::tracker::pr_merged_for_issue <N>    # → PR number that closed the issue, or empty
@@ -149,8 +153,14 @@ afk::tracker::open_afk_prds() {
 # === Blocker parsing =========================================================
 
 # Parse the issue body's `## Blocked by` section and print blocker issue
-# numbers, one per line. Only that section is searched — naive grep over the
-# whole body picks up parent references and footer mentions.
+# numbers, one per line.
+#
+# Why scoped to that section: a naive grep over the whole body picks up
+# the `Parent: #N` line, the AFK footer attribution, and any incidental
+# `#N` mentioned in prose — which made every child issue look blocked by
+# its own PRD and starved the orchestrator's pool. The awk state machine
+# enters at `## Blocked by`, leaves at the next `## ` heading or the
+# horizontal rule before the footer.
 afk::tracker::blockers() {
   local n="$1"
   local body
@@ -209,7 +219,11 @@ afk::tracker::pr_view_json() {
 }
 
 # Echo "GREEN" / "RED" / "PENDING" / "UNKNOWN" for the PR's CI summary.
-# "No checks configured" is treated as GREEN so agent-driven gating still works.
+#
+# Design choice: "no checks configured" → GREEN, not UNKNOWN. Many repos
+# (especially internal ones) disable Actions/Pipelines entirely; treating
+# that as RED would prevent AFK from working there at all. The agent-side
+# pr_review phase still gates on diff quality even when CI is silent.
 afk::tracker::ci_status() {
   local pr="$1"
   case "$TRACKER" in
