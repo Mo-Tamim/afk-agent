@@ -47,3 +47,17 @@ afk::lock_held() {
   local issue="$1"
   [[ -f "$AFK_STATE/issue-${issue}.lock" ]]
 }
+
+# True (rc=0) only if a lock exists AND the pid it records is still running.
+# This is the liveness probe that distinguishes "a runner is genuinely on
+# this issue right now" from "a lock file (and matching afk-in-progress
+# label) was left behind by a crashed / killed runner". Callers use it to
+# decide between *skipping* (live owner) and *resuming* (stale owner).
+afk::lock_alive() {
+  local issue="$1"
+  local lock="$AFK_STATE/issue-${issue}.lock"
+  [[ -f "$lock" ]] || return 1
+  local pid; pid="$(cut -d: -f1 "$lock" 2>/dev/null || echo)"
+  [[ -n "$pid" ]] || return 1
+  kill -0 "$pid" 2>/dev/null
+}

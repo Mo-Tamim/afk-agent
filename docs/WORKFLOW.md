@@ -638,6 +638,24 @@ You'll find two new markdown files in `<package-path>/docs/`:
 
 Skim both, then move on to the next PRD or take the rest of the day.
 
+The docs-gate is crash-safe the same way per-child runs are. When it
+starts a PRD's docs phase it stamps the PRD `afk-in-progress` **and**
+takes a per-PRD lock (`.afk/state/issue-<PRD>.lock`) recording its pid.
+If the runner dies mid-docs (e.g. cursor-agent loses its connection, or
+you kill the orchestrator), the label and lock are left behind. On the
+next pass the gate probes the lock for liveness:
+
+- lock owned by a **running** pid → a docs runner is genuinely active →
+  skip (no double-processing).
+- lock missing or pid **dead** → stale → **resume** the interrupted
+  docs run from the first not-completed phase
+  (`document` → `pr` → `merge`, tracked in `.afk/state/issue-<PRD>.json`),
+  reusing the existing branch/worktree/PR.
+
+This is why a stale `afk-in-progress` no longer wedges a PRD forever —
+the gate distinguishes "still running" from "crashed and left a label"
+instead of treating every `afk-in-progress` PRD as busy.
+
 ---
 
 ## Edge cases & gotchas
@@ -667,6 +685,19 @@ per-phase state in `.afk/state/issue-N.json` plus idempotent tracker
 short-circuits). You do **not** have to re-add `ready-for-agent` just
 because the runner stopped locally. If you truly abandoned the work,
 remove the in-progress label or mark the issue blocked manually.
+
+### "The docs phase died mid-run and the PRD is stuck"
+
+Same story as a child issue, on the PRD. The docs-gate stamps the PRD
+`afk-in-progress` and takes `.afk/state/issue-<PRD>.lock` before running
+the `document` agent. If that run is killed (connection lost, you killed
+the orchestrator) the label and lock stay behind. The next `afk run`
+idle pass — or a manual `afk document` — checks whether the lock's pid is
+still alive: if not, it treats the label as **stale** and resumes the
+docs phase from the first not-completed step instead of skipping the PRD
+forever. You don't need to hand-remove the label. If you truly want to
+abandon the docs run, delete `.afk/state/issue-<PRD>.lock` and remove the
+`afk-in-progress` label, or mark the PRD `afk-blocked`.
 
 ### "CI is flaky and the orchestrator keeps marking things blocked"
 
