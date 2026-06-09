@@ -209,7 +209,8 @@ don't change.
 ## Observability layer
 
 The orchestrator emits two parallel streams that anything else can
-read without touching the scripts:
+read without touching the scripts, plus a **subprocess registry** for
+spawn/reap auditing:
 
 ```mermaid
 flowchart LR
@@ -218,9 +219,10 @@ flowchart LR
     RI[run-issue.sh]
     RP[run-phase.sh]
   end
-  subgraph Streams[Two parallel streams]
+  subgraph Streams[On-disk streams]
     S[(.afk/state/<br/>issue-N.json)]
     E[(.afk/logs/<br/>events.ndjson)]
+    R[(.afk/logs/<br/>subprocess-registry.ndjson)]
   end
   subgraph Readers[Read-only consumers]
     Status[afk status<br/>CLI snapshot]
@@ -230,16 +232,18 @@ flowchart LR
 
   O & RI & RP -- atomic jq+mv --> S
   O & RI & RP -- append --> E
+  O & RI & RP -- append --> R
   S --> Status
   S --> Dash
   E --> Dash
+  R --> Dash
   E --> Custom
 
   classDef script fill:#fff4d6,stroke:#92400e,color:#0f172a,stroke-width:1.5px;
   classDef stream fill:#eee,stroke:#475569,color:#0f172a,stroke-width:1.5px;
   classDef reader fill:#dff,stroke:#0369a1,color:#0f172a,stroke-width:1.5px;
   class O,RI,RP script
-  class S,E stream
+  class S,E,R stream
   class Status,Dash,Custom reader
 ```
 
@@ -250,7 +254,11 @@ flowchart LR
   Append-only NDJSON, one line per lifecycle transition (see
   [DASHBOARD.md § Telemetry](./DASHBOARD.md#telemetry)). Best-effort —
   scripts continue working even if the file is unwritable.
-- Both streams are **read-only inputs** to downstream tools. Nothing
+- **Subprocess registry** (`.afk/logs/subprocess-registry.ndjson`)
+  records spawn/reap pairs for issue runners, agent wrappers, and
+  timeout sentries so the dashboard can flag unexpected live PIDs and
+  operators can audit leaks after crashes.
+- All three are **read-only inputs** to downstream tools. Nothing
   in the orchestrator depends on a reader being present. You can
   swap `afk dashboard` for a custom Grafana exporter without
   touching a single phase prompt.

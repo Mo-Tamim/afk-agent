@@ -142,7 +142,7 @@ sequenceDiagram
   Dev->>AFK: .afk/scripts/afk decompose <PRD#>
   AFK->>Tracker: open N child issues (label: afk-child)
   Dev->>AFK: .afk/scripts/afk run
-  loop For each ready child (bounded parallelism)
+  loop For each child (resume afk-in-progress first, else ready-for-agent; bounded parallelism)
     AFK->>AFK: plan → implement → review → PR → wait CI → review → merge
   end
   AFK->>Tracker: docs PR for the PRD
@@ -237,7 +237,7 @@ flowchart TB
   Doc -->|merge| PRD2[(PRD closed\nlabel: afk-done)]
 
   Pool -.->|BLOCKED / timeout / merge gate| Notify[notify-developer\naudible alarm]
-  Pool -.->|emits events.ndjson<br/>+ state files| DB[afk dashboard\nlive web view]
+  Pool -.->|emits events.ndjson + subprocess-registry.ndjson<br/>+ state files| DB[afk dashboard\nlive web view]
 ```
 
 
@@ -326,11 +326,13 @@ hard block — it triggers
 `[notify-developer](https://www.skills.sh/)` or the configured
 equivalent and stops.
 - **Observability for free.** Every phase boundary, runner spawn,
-and agent invocation appends one JSON line to
-`.afk/logs/events.ndjson`. The
-[live web dashboard](./docs/DASHBOARD.md) consumes that stream
-plus the on-disk state files — no agents instrumented, no extra
-daemons, no databases.
+  and agent invocation appends one JSON line to
+  `.afk/logs/events.ndjson`. Spawn/reap pairs for runners, agent
+  wrappers, and timeout sentries also go to
+  `.afk/logs/subprocess-registry.ndjson` so the
+  [live web dashboard](./docs/DASHBOARD.md) can show a tail and flag
+  unexpected live PIDs — no agents instrumented, no extra daemons, no
+  databases.
 
 ## Scenarios — when things go sideways
 
@@ -340,7 +342,11 @@ verbose mode, etc.) see [docs/EXTENDING.md § Troubleshooting](./docs/EXTENDING.
 
 ### Scenario: Orchestrator was terminated (crash, reboot, Ctrl-C)
 
-State is on disk; resume is built in.
+State is on disk; resume is built in. **`afk run` also resumes any open
+child that still has `afk-in-progress` on the tracker** (ahead of fresh
+`ready-for-agent` picks), so you usually do **not** need a manual
+`afk issue <N>` after Cursor or the terminal dies — the next pool pass
+picks up the interrupted child once its blockers are clear.
 
 ```bash
 pgrep -af 'orchestrate\.sh|run-issue\.sh|run-phase\.sh'
@@ -353,7 +359,9 @@ done
 .afk/scripts/afk run
 ```
 
-`completed_phases` in `.afk/state/issue-<N>.json` is the resume cursor; nothing else needs unsticking. The next `afk run` picks up at each issue's first not-completed phase.
+`completed_phases` in `.afk/state/issue-<N>.json` is the resume cursor; nothing else needs unsticking for a clean retry. If a **stale** lock
+file still references a dead PID, delete it as above — `afk run` will
+then dequeue the matching `afk-in-progress` child automatically.
 
 ### Scenario: Issue tagged `afk-blocked`
 
@@ -486,7 +494,10 @@ In **chat-detached** or **terminal-background** mode the orchestrator continues 
 
 ### Q: Can I run multiple PRDs in parallel?
 
-Yes. `afk run` is PRD-agnostic — it pulls any `afk-child, ready-for-agent` issue regardless of which PRD it belongs to. Decompose two PRDs back-to-back and let the pool drain them.
+Yes. `afk run` is PRD-agnostic — it pulls any unblocked `afk-child` issue
+that is either **`afk-in-progress`** (auto-resume band, sorted first)
+or **`ready-for-agent`**, regardless of which PRD it belongs to.
+Decompose two PRDs back-to-back and let the pool drain them.
 
 ### Q: How much agent quota does this burn?
 

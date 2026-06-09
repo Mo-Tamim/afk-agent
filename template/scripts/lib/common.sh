@@ -170,3 +170,87 @@ afk::slug() {
     | cut -c1-50 \
     | sed 's/-$//'
 }
+
+# --- Process tree (Linux /proc) ---------------------------------------------
+# List direct child PIDs of `parent` (PPid in /proc/<pid>/status).
+
+afk::proc_children_of() {
+  local parent="$1"
+  local d pid ppid
+  shopt -s nullglob
+  for d in /proc/[0-9]*; do
+    [[ -r "$d/status" ]] || continue
+    pid="${d#/proc/}"
+    ppid="$(awk '/^PPid:/{print $2}' "$d/status" 2>/dev/null || true)"
+    [[ "$ppid" == "$parent" ]] && printf '%s\n' "$pid"
+  done
+}
+
+# Recursively SIGTERM every descendant of `root`, deepest first. Does **not**
+# signal `root` itself — call with the wrapper PID whose children should die.
+
+afk::proc_kill_descendants_of() {
+  local root="$1"
+  local c
+  while IFS= read -r c; do
+    [[ -z "$c" ]] && continue
+    afk::proc_kill_descendants_of "$c"
+    kill -TERM "$c" 2>/dev/null || true
+  done < <(afk::proc_children_of "$root")
+}
+
+# SIGTERM every direct child of `parent` and each child's whole subtree. Used
+# when a parent shell (e.g. run-issue.sh) stops — children are not always in
+# the same process group as the orchestrator's Ctrl-C target.
+
+afk::proc_kill_child_trees() {
+  local parent="$1"
+  local c
+  while IFS= read -r c; do
+    [[ -z "$c" ]] && continue
+    afk::proc_kill_descendants_of "$c"
+    kill -TERM "$c" 2>/dev/null || true
+  done < <(afk::proc_children_of "$parent")
+}
+
+# --- Subprocess registry (dashboard + leak audits) ---------------------------
+# Append-only NDJSON at .afk/logs/subprocess-registry.ndjson. Same shape
+# discipline as telemetry: best-effort, never affects control flow.
+#
+# Usage: afk::registry::emit <action> <k1> <v1> [<k2> <v2> ...]
+#   action — conventionally "spawn" or "reap"
+#   plus arbitrary scalar key/value pairs (role, pid, issue, …).
+
+afk::registry::emit() {
+  local action="${1:?}"; shift || true
+  local file="$AFK_LOGS/subprocess-registry.ndjson"
+  [[ -d "$AFK_LOGS" ]] || return 0
+
+  local ts ts_epoch
+  ts="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)"
+  ts_epoch="$(date +%s.%N 2>/dev/null || date +%s)"
+
+  if command -v jq >/dev/null 2>&1; then
+    local -a jq_args=(-n -c
+      --arg ts "$ts" --arg ts_epoch "$ts_epoch"
+      --arg action "$action" --arg scope "${AFK_SCOPE:-afk}" --arg parent_pid "$$")
+    local jq_obj='{ts:$ts, ts_epoch:($ts_epoch|tonumber? // null), action:$action, scope:$scope, parent_pid:($parent_pid|tonumber)}'
+    while (( $# >= 2 )); do
+      local k="$1" v="$2"; shift 2
+      jq_args+=(--arg "kv_$k" "$v")
+      jq_obj+=" | .[\"$k\"] = \$kv_$k"
+    done
+    jq "${jq_args[@]}" "$jq_obj" >> "$file" 2>/dev/null || true
+  else
+    local kvs=""
+    while (( $# >= 2 )); do
+      local k="$1" v="$2"; shift 2
+      v="${v//\\/\\\\}"; v="${v//\"/\\\"}"
+      v="${v//$'\n'/\\n}"; v="${v//$'\t'/\\t}"
+      kvs+=",\"$k\":\"$v\""
+    done
+    printf '{"ts":"%s","ts_epoch":%s,"action":"%s","scope":"%s","parent_pid":%s%s}\n' \
+      "$ts" "$ts_epoch" "$action" "${AFK_SCOPE:-afk}" "$$" "$kvs" \
+      >> "$file" 2>/dev/null || true
+  fi
+}

@@ -66,10 +66,16 @@
   function renderSummary(s) {
     state.summary = s;
     const alive = s.orchestrator_alive;
+    const reg = s.subprocess_registry || {};
+    const unreaped = reg.live_unreaped_spawns || [];
     $("#orch-dot").className = "dot " + (alive ? "alive" : "dead");
-    $("#orch-status").textContent = alive
+    let statusLine = alive
       ? `orchestrator alive · ${s.processes.runners.length} runner${s.processes.runners.length === 1 ? "" : "s"} · ${s.processes.agents.length} agent${s.processes.agents.length === 1 ? "" : "s"}`
       : "orchestrator not running";
+    if (unreaped.length) {
+      statusLine += ` · registry: ${unreaped.length} live spawn row(s) — see Subprocess registry`;
+    }
+    $("#orch-status").textContent = statusLine;
     $("#repo-name").textContent = s.repo || "(no repo configured)";
     $("#prd-info").textContent = `${s.tracker || "?"} · max_parallel=${s.max_parallel || "?"} · merge_mode=${s.merge_mode || "auto"}`;
 
@@ -86,6 +92,25 @@
     for (const [k, v] of rows) {
       panel.appendChild(el("div", { class: "k" }, k));
       panel.appendChild(el("div", { class: "v" }, String(v)));
+    }
+
+    const alertBox = $("#subproc-alerts");
+    const tailBox = $("#subproc-tail");
+    if (alertBox && tailBox) {
+      alertBox.innerHTML = "";
+      if (unreaped.length) {
+        const parts = unreaped.map(
+          (u) => `pid ${u.pid} (${u.role || "?"}` + (u.issue != null ? ` · #${u.issue}` : "") + ")"
+        );
+        alertBox.appendChild(el("div", { class: "subproc-warn" }, [
+          "Live processes still marked as spawned in the registry tail: ",
+          parts.join("; "),
+        ]));
+      }
+      const recent = reg.recent || [];
+      tailBox.textContent = recent.length
+        ? recent.map((e) => JSON.stringify(e)).join("\n")
+        : "(empty registry tail)";
     }
   }
 

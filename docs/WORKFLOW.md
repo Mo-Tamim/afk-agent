@@ -474,7 +474,7 @@ sequenceDiagram
   participant W as Worktree
   participant A as Agent
   participant T as Tracker
-  O->>O: pick next unblocked child (e.g. #43)
+  O->>O: pick next unblocked child (resume `afk-in-progress` first, then `ready-for-agent`)
   O->>W: git worktree add .afk/worktrees/issue-43
   O->>A: phase=plan, prompt rendered with #43 vars
   A->>T: read issue #43
@@ -522,8 +522,9 @@ Close your laptop. Make coffee. Go for a walk.
 >
 > The dashboard auto-refreshes every 2 s and shows orchestrator
 > liveness, per-issue phase pipelines, log tails, worktrees, PRs,
-> and CI. It's read-only and safe to leave open. See
-> [docs/DASHBOARD.md](./DASHBOARD.md).
+> CI, and a **subprocess registry** tail (spawn/reap audit for runners,
+> agent wrappers, and timeout sentries). It's read-only and safe to
+> leave open. See [docs/DASHBOARD.md](./DASHBOARD.md).
 
 The orchestrator will:
 
@@ -651,8 +652,21 @@ fresh. If the phase has already passed (e.g. `plan` is done), use
 ### "I want to run two PRDs in parallel"
 
 Just decompose both. `afk run` doesn't care which PRD a child
-belongs to — it picks any unblocked `afk-child, ready-for-agent`
-issue.
+belongs to — it picks any unblocked `afk-child` issue that is either
+**`afk-in-progress`** (resume band: e.g. after a crash or Ctrl-C left
+the tracker in that state) or **`ready-for-agent`** (fresh work).
+In-progress issues sort **ahead of** ready-only issues so a stalled
+head-of-chain child is picked up automatically when you start
+`afk run` again.
+
+### "The orchestrator or IDE died mid-issue"
+
+If the tracker still shows `afk-in-progress` on the child, the next
+`afk run` **auto-resumes** that issue (same rules as `afk issue N`:
+per-phase state in `.afk/state/issue-N.json` plus idempotent tracker
+short-circuits). You do **not** have to re-add `ready-for-agent` just
+because the runner stopped locally. If you truly abandoned the work,
+remove the in-progress label or mark the issue blocked manually.
 
 ### "CI is flaky and the orchestrator keeps marking things blocked"
 

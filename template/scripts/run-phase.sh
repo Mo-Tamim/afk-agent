@@ -98,6 +98,47 @@ afk::telemetry::emit phase_start \
   issue "$ISSUE" phase "$PHASE" branch "${BRANCH:-}" \
   cwd "$CWD" log "$LOG" run_id "$RUN_ID"
 
+# PIDs registered in .afk/logs/subprocess-registry.ndjson for the dashboard.
+# EXIT trap guarantees we never leave a timeout sentry or agent wrapper alive
+# if this script is killed mid-wait (Cursor crash, orchestrator SIGTERM, …).
+AGENT_PID=""
+TIMEOUT_PID=""
+AGENT_REG_DONE=0
+TIMEOUT_REG_DONE=0
+
+phase_registry_reap_agent() {
+  (( AGENT_REG_DONE )) && return 0
+  [[ -z "${AGENT_PID:-}" ]] && return 0
+  AGENT_REG_DONE=1
+  afk::registry::emit reap role phase_agent_wrapper pid "$AGENT_PID" issue "$ISSUE" \
+    phase "$PHASE" run_id "$RUN_ID" || true
+}
+
+phase_registry_reap_timeout() {
+  (( TIMEOUT_REG_DONE )) && return 0
+  [[ -z "${TIMEOUT_PID:-}" ]] && return 0
+  TIMEOUT_REG_DONE=1
+  afk::registry::emit reap role phase_timeout_sentry pid "$TIMEOUT_PID" issue "$ISSUE" \
+    phase "$PHASE" run_id "$RUN_ID" || true
+}
+
+phase_exit_cleanup() {
+  if [[ -n "${TIMEOUT_PID:-}" ]]; then
+    kill "$TIMEOUT_PID" 2>/dev/null || true
+    phase_registry_reap_timeout
+  fi
+  if [[ -n "${AGENT_PID:-}" ]]; then
+    if kill -0 "$AGENT_PID" 2>/dev/null; then
+      afk::warn "issue $ISSUE phase $PHASE: tearing down agent wrapper pid $AGENT_PID (+ subtree)"
+      afk::proc_kill_descendants_of "$AGENT_PID"
+      kill -TERM "$AGENT_PID" 2>/dev/null || true
+    fi
+    phase_registry_reap_agent
+  fi
+}
+
+trap 'phase_exit_cleanup' EXIT
+
 # === 6. Spawn the agent with a wall-clock watchdog ===========================
 # The agent reads the prompt on stdin and streams to the log. We background
 # it so we can attach a timeout sentry as a sibling process — bash's
@@ -106,6 +147,8 @@ afk::telemetry::emit phase_start \
 # shellcheck disable=SC2086
 ( cd "$CWD" && $AGENT_BIN $AGENT_FLAGS < "$PROMPT_OUT" ) > "$LOG" 2>&1 &
 AGENT_PID=$!
+afk::registry::emit spawn role phase_agent_wrapper pid "$AGENT_PID" parent_pid "$$" \
+  issue "$ISSUE" phase "$PHASE" run_id "$RUN_ID" agent_bin "$AGENT_BIN" || true
 afk::telemetry::emit agent_spawn \
   issue "$ISSUE" phase "$PHASE" agent_pid "$AGENT_PID" \
   agent_bin "$AGENT_BIN"
@@ -117,10 +160,15 @@ if [[ "$TIMEOUT" =~ ^[0-9]+$ ]] && (( TIMEOUT > 0 )); then
   ( sleep "$TIMEOUT" && kill -0 "$AGENT_PID" 2>/dev/null && kill "$AGENT_PID" 2>/dev/null && \
       afk::warn "agent killed after ${TIMEOUT}s timeout" ) &
   TIMEOUT_PID=$!
+  afk::registry::emit spawn role phase_timeout_sentry pid "$TIMEOUT_PID" parent_pid "$$" \
+    issue "$ISSUE" phase "$PHASE" run_id "$RUN_ID" || true
 fi
 
 wait "$AGENT_PID" || true
-[[ -n "${TIMEOUT_PID:-}" ]] && kill "$TIMEOUT_PID" 2>/dev/null || true
+if [[ -n "${TIMEOUT_PID:-}" ]]; then
+  kill "$TIMEOUT_PID" 2>/dev/null || true
+  phase_registry_reap_timeout
+fi
 
 # === 7. Classify the outcome from the sentinel ===============================
 # We never parse prose. We grep for the three known <promise>X</promise>

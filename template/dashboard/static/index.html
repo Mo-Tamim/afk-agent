@@ -40,6 +40,12 @@
         <div id="orch-panel" class="kv"></div>
       </section>
       <section class="panel">
+        <h2>Subprocess registry</h2>
+        <p class="muted small">Spawn/reap audit written by the scripts (tail). Rows whose last action is <code>spawn</code> and PID still exists are highlighted — expect at most one row per active phase.</p>
+        <div id="subproc-alerts"></div>
+        <pre id="subproc-tail" class="logbox small">(no registry file yet)</pre>
+      </section>
+      <section class="panel">
         <h2>Worktrees</h2>
         <div id="worktrees"></div>
       </section>

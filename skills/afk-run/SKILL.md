@@ -23,6 +23,15 @@ making the user juggle a separate terminal.
   support this; if it can't, fall back to the terminal mode in
   [`docs/MODES.md`](../../docs/MODES.md).
 
+## What `afk run` does (for the driving agent)
+
+The parallel orchestrator (`afk run`) **prefers resuming** any open
+`afk-child` that still has **`afk-in-progress`** on the tracker (e.g.
+after a crash) before it pulls fresh **`ready-for-agent`** work, as long
+as blockers are closed and the issue is not locked. You normally do
+**not** need to re-run `afk issue N` after an IDE restart unless you
+want a blocking, chat-attached session.
+
 ## What the user can ask for
 
 | User says…                                  | You run…                                       |

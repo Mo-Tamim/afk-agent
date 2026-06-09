@@ -45,7 +45,16 @@ afk::require jq git "$AFK_TRACKER_CLI"
 if ! afk::lock_acquire "$ISSUE"; then
   afk::die "issue $ISSUE is already locked by another runner; refusing to double-process"
 fi
-trap 'rc=$?; afk::lock_release "'"$ISSUE"'"; afk::telemetry::emit issue_end issue "'"$ISSUE"'" rc "$rc"' EXIT
+
+# Tear down any live `run-phase.sh` / agent subtree when this runner exits or
+# receives SIGTERM from the orchestrator (so we do not leave cursor-agent
+# processes behind).
+issue_cleanup_children() {
+  afk::proc_kill_child_trees "$$"
+}
+
+trap 'rc=$?; issue_cleanup_children || true; afk::lock_release "'"$ISSUE"'"; afk::telemetry::emit issue_end issue "'"$ISSUE"'" rc "$rc"' EXIT
+trap 'issue_cleanup_children || true' INT TERM HUP
 afk::telemetry::emit issue_start issue "$ISSUE"
 
 # === Verify the issue is in a runnable state =================================
