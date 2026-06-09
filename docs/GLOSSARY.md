@@ -67,8 +67,12 @@ A `label` applied to issues that have been merged via the AFK
 pipeline. Use it to count throughput.
 
 ### `afk-in-progress`
-A `label` applied while the orchestrator holds an issue. Combined
-with the per-issue `lock file` to prevent double-processing.
+A `label` applied while the orchestrator holds an issue (child **or**
+PRD). Combined with the per-issue `lock file` to prevent
+double-processing. On its own the label does **not** mean "running" —
+a crash leaves it behind. Both the child pool and the `docs-gate`
+treat an `afk-in-progress` issue whose `lock file` has no `live lock`
+as a stale label to **`resume`**, not skip.
 
 ### `afk-prd`
 A `label` applied to PRD issues. The `docs-gate` scans for these
@@ -197,7 +201,13 @@ docs PR, merges it. See
 The orchestrator's scanner (`document-gate.sh`) that checks every
 open `afk-prd` issue to see if all its children are closed. If so,
 it kicks the `document` phase. Runs after every idle pass of the
-parallel orchestrator.
+parallel orchestrator. Crash-safe like a child `runner`: it stamps
+the PRD `afk-in-progress` and takes a per-PRD `lock file` before
+running, then on later passes uses the `live lock` probe to tell a
+genuinely-running docs phase (skip) from a stale label left by a dead
+runner (**`resume`** from the first not-completed phase, reusing the
+branch / `worktree` / PR). A stale `afk-in-progress` therefore never
+wedges a PRD forever.
 
 ---
 
@@ -213,11 +223,12 @@ never change script behavior. Consumed by the `dashboard`.
 
 ### `subprocess-registry.ndjson`
 `.afk/logs/subprocess-registry.ndjson`. Append-only JSON-lines stream
-of **`spawn`** / **`reap`** rows for issue runners, per-phase agent
-wrapper processes, and timeout sentries. Emitted by
-`afk::registry::emit` on a best-effort basis. The dashboard reads the
-tail and flags PIDs whose last row is still `spawn` while `/proc/<pid>`
-exists (useful to spot stray agent processes after a crash).
+of **`spawn`** / **`reap`** rows, each tagged with a `role` —
+`issue_runner`, `phase_agent_wrapper`, or `phase_timeout_sentry`.
+Emitted by `afk::registry::emit` on a best-effort basis. The dashboard
+reads the tail and flags PIDs whose last row is still `spawn` while
+`/proc/<pid>` exists (useful to spot stray agent processes after a
+crash).
 
 ---
 
@@ -285,6 +296,12 @@ A unit of work tracked on the `tracker`. PRDs are issues, children
 are issues. The orchestrator never invents issues — it always
 operates on tracker-side reality.
 
+### `issue_runner`
+A `subprocess-registry.ndjson` `role`: the backgrounded `run-issue.sh`
+process the `orchestrator` spawns per issue and tracks in its `pool`.
+Spawned in `orchestrate.sh`; reaped on normal exit or when the
+orchestrator catches SIGINT/SIGTERM and tears down in-flight runners.
+
 ---
 
 ## L
@@ -298,10 +315,22 @@ and by humans for filtering.
 The default install scope: scripts copied into `<repo>/.afk/scripts`.
 Committed alongside `config.yml`. Compare to `global scope`.
 
+### Live lock
+A `lock file` whose recorded pid is still running. Probed by
+`afk::lock_alive` (in `lib/lock.sh`): it returns true only when the
+lock exists **and** `kill -0 <pid>` succeeds. This is the test that
+separates "a runner is genuinely on this issue right now" (skip) from
+"a crashed / killed runner left a lock and an `afk-in-progress` label
+behind" (**`resume`**). Used by both the child pool and the
+`docs-gate`.
+
 ### Lock file
 A per-issue file at `.afk/state/issue-N.lock` created atomically
-via `set -C` redirection. Prevents two orchestrator runs from
-processing the same issue.
+via `set -C` redirection, recording `<pid>:<host>:<time>`. Prevents
+two orchestrator runs from processing the same issue. A lock owned by
+a dead pid is **stale**: `afk::lock_acquire` reclaims it transparently,
+and the `live lock` probe (`afk::lock_alive`) reports it as not
+running so the owner can be `resume`d.
 
 ---
 
@@ -369,6 +398,19 @@ One step in a child issue's lifecycle. There are eight:
 `pr_review`, `pr_merge`, plus `document` for PRDs. Each has a
 prompt under `.afk/prompts/`.
 
+### `phase_agent_wrapper`
+A `subprocess-registry.ndjson` `role`: the subshell `run-phase.sh`
+wraps around `agent_bin` for a single phase
+(`( cd "$CWD" && $AGENT_BIN $AGENT_FLAGS < "$PROMPT_OUT" )`). Spawned in
+`run-phase.sh`; killed with its whole subtree and reaped by the script's
+EXIT trap so a crashed or signalled phase never orphans an `agent`.
+
+### `phase_timeout_sentry`
+A `subprocess-registry.ndjson` `role`: the wall-clock watchdog subshell
+`run-phase.sh` spawns beside the `phase_agent_wrapper` to `kill` the
+agent once the phase's timeout elapses. Reaped as soon as the agent
+finishes or the script exits, whichever comes first.
+
 ### `pick_batch`
 The orchestrator function that picks the next set of unblocked
 ready-for-agent children. The pool fills from its output.
@@ -410,7 +452,10 @@ by `decompose`) when an issue is ready.
 The orchestrator's ability to pick up where it left off after a
 crash, reboot, or `Ctrl-C`. Backed by `completed_phases` in
 `.afk/state/issue-N.json` plus idempotent tracker-side checks
-(reuse open PR, detect already-merged, …).
+(reuse open PR, detect already-merged, …). Applies to both child
+issues (`run-issue.sh`) and PRD docs runs (`docs-gate`); in both
+cases an `afk-in-progress` label with no `live lock` is the resume
+trigger.
 
 ### `review` (phase)
 The local pre-PR pass over the implementer's commits. Clarity only;
