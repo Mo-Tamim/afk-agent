@@ -15,7 +15,7 @@ exactly one phase.
 PRD issue (label: afk-prd, ready-for-agent)
    └─ decompose ──> N child issues (label: afk-child + ready-for-agent)
                        │
-                       │ orchestrator picks unblocked children up to max_parallel
+                       │ orchestrator picks unblocked children (resume `afk-in-progress` first, else `ready-for-agent`) up to max_parallel
                        ▼
                     plan → implement → review
                        ▼

@@ -44,6 +44,7 @@ flowchart LR
     L[(logs/issue-N-phase-*/)]
     OL[(logs/orchestrator.log)]
     E[(logs/events.ndjson)]
+    REG[(logs/subprocess-registry.ndjson)]
   end
 
   subgraph Outside["Outside world"]
@@ -60,16 +61,20 @@ flowchart LR
 
   O -- writes --> OL
   O -- writes --> E
+  O -- writes --> REG
   RI -- writes --> S
   RI -- writes --> E
+  RI -- writes --> REG
   RP -- writes --> S
   RP -- writes --> L
   RP -- writes --> E
+  RP -- writes --> REG
 
   API -- reads --> S
   API -- reads --> L
   API -- reads --> OL
   API -- reads --> E
+  API -- reads --> REG
   API -- shells out --> G
   API --> CACHE
   CACHE -- shells out --> T
@@ -81,7 +86,7 @@ flowchart LR
   classDef ext    fill:#fdd,stroke:#991b1b,color:#0f172a,stroke-width:1.5px;
   classDef serv   fill:#dff,stroke:#0369a1,color:#0f172a,stroke-width:1.5px;
   class O,RI,RP script
-  class S,L,OL,E disk
+  class S,L,OL,E,REG disk
   class G,T ext
   class API,CACHE serv
 ```
@@ -148,6 +153,13 @@ browser at the dashboard URL automatically. Use `--no-browser` to skip.
 - `phases cfg` is `phases:` from `.afk/config.yml` — the source of
   truth for the per-issue pipeline.
 
+### Subprocess registry (left, below Orchestrator)
+- Tail of `.afk/logs/subprocess-registry.ndjson` (spawn / reap audit).
+- Warns when a PID's **last event in the scanned tail** is still
+  `spawn` while `/proc/<pid>` exists — normal while a phase is active;
+  if it persists after everything should be idle, investigate stray
+  `cursor-agent` / wrapper processes.
+
 ### Issue cards (middle)
 One per `.afk/state/issue-*.json`. Each card shows:
 - Issue number, branch, PR/MR link, CI status badge, last update.
@@ -189,21 +201,26 @@ sequenceDiagram
   participant P as run-phase.sh
   participant A as $AGENT_BIN
   participant E as events.ndjson
+  participant REG as subprocess-registry.ndjson
 
   O->>E: orchestrator_start
   O->>R: spawn for issue N
-  O->>E: runner_spawn(issue=N, runner_pid)
+  O->>E: runner_spawn(issue=N, runner_pid, resume)
+  O->>REG: spawn issue_runner
   R->>E: issue_start(issue=N)
   loop per phase
     R->>P: run-phase.sh <phase> N
     P->>E: phase_start(issue, phase, log, run_id)
     P->>A: spawn agent (prompt on stdin)
     P->>E: agent_spawn(agent_pid, agent_bin)
+    P->>REG: spawn phase_agent_wrapper + timeout_sentry
     A-->>P: <promise>OUTCOME</promise>
     P->>E: phase_end(outcome, rc, duration_s)
+    P->>REG: reap wrappers/sentries on exit
   end
   R->>E: issue_end(issue=N, rc)
   O->>E: runner_reap(issue=N, rc)
+  O->>REG: reap issue_runner
   O->>E: orchestrator_exit(reason)
 ```
 
@@ -211,8 +228,8 @@ sequenceDiagram
 | ------------------- | ------------------ | ----------------------------------------------- |
 | `orchestrator_start`| `orchestrate.sh`   | `max_parallel`, `tracker`, `repo`               |
 | `orchestrator_exit` | `orchestrate.sh`   | `reason`                                        |
-| `runner_spawn`      | `orchestrate.sh`   | `issue`, `runner_pid`                           |
-| `runner_reap`       | `orchestrate.sh`   | `issue`, `runner_pid`, `rc`                     |
+| `runner_spawn`      | `orchestrate.sh`   | `issue`, `runner_pid`, `resume` (`1` = tracker had `afk-in-progress`) |
+| `runner_reap`       | `orchestrate.sh`   | `issue`, `runner_pid`, `rc`, optional `reason` |
 | `issue_start`       | `run-issue.sh`     | `issue`                                         |
 | `issue_end`         | `run-issue.sh`     | `issue`, `rc`                                   |
 | `phase_start`       | `run-phase.sh`     | `issue`, `phase`, `branch`, `cwd`, `log`, `run_id` |

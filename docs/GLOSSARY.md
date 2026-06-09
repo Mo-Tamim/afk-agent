@@ -48,7 +48,7 @@ The single CLI entrypoint at `.afk/scripts/afk`. Dispatches to
 ### `afk dashboard`
 The `subcommand` that launches the live web dashboard at
 `http://127.0.0.1:8765`. Read-only; consumes `state file`s,
-`logs/`, `events.ndjson`, `git worktree list`, and `gh`/`glab`. See
+`logs/`, `events.ndjson`, `subprocess-registry.ndjson`, `git worktree list`, and `gh`/`glab`. See
 [DASHBOARD.md](./DASHBOARD.md).
 
 ### `afk-blocked`
@@ -59,7 +59,8 @@ fixed".
 ### `afk-child`
 A `label` applied to every child issue produced by the
 `decompose` phase. The orchestrator's pool only pulls from this
-label.
+label, preferring **`afk-in-progress`** (resume) ahead of
+**`ready-for-agent`** (fresh work).
 
 ### `afk-done`
 A `label` applied to issues that have been merged via the AFK
@@ -159,7 +160,7 @@ broadest tool support out of the box.
 ### Dashboard
 The live web view at `.afk/dashboard/`, launched via
 `afk dashboard`. A stdlib Python HTTP server that reads
-`state files`, `logs/`, `events.ndjson`, `git worktree list`, and
+`state files`, `logs/`, `events.ndjson`, `subprocess-registry.ndjson`, `git worktree list`, and
 the `tracker` CLI, and renders a single-page UI that auto-refreshes
 every 1–15 s. Read-only — never writes to AFK state. See
 [DASHBOARD.md](./DASHBOARD.md).
@@ -209,6 +210,14 @@ significant lifecycle transition (`orchestrator_start`,
 `orchestrator_exit`, etc.). Emitted by the
 `afk::telemetry::emit` helper on a best-effort basis — failures
 never change script behavior. Consumed by the `dashboard`.
+
+### `subprocess-registry.ndjson`
+`.afk/logs/subprocess-registry.ndjson`. Append-only JSON-lines stream
+of **`spawn`** / **`reap`** rows for issue runners, per-phase agent
+wrapper processes, and timeout sentries. Emitted by
+`afk::registry::emit` on a best-effort basis. The dashboard reads the
+tail and flags PIDs whose last row is still `spawn` while `/proc/<pid>`
+exists (useful to spot stray agent processes after a crash).
 
 ---
 

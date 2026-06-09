@@ -213,6 +213,56 @@ def scan_afk_processes(afk_root: Path) -> dict[str, Any]:
     }
 
 
+def read_subprocess_registry_tail(afk_root: Path, limit: int = 200) -> list[dict[str, Any]]:
+    path = afk_root / ".afk" / "logs" / "subprocess-registry.ndjson"
+    if not path.is_file():
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    chunk = lines[-limit:] if len(lines) > limit else lines
+    out: list[dict[str, Any]] = []
+    for line in chunk:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            out.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return out
+
+
+def subprocess_registry_view(afk_root: Path) -> dict[str, Any]:
+    """Last registry lines + PIDs whose latest row is `spawn` and /proc still exists."""
+    events = read_subprocess_registry_tail(afk_root, 500)
+    last_by_pid: dict[int, dict[str, Any]] = {}
+    for ev in events:
+        pid = ev.get("pid")
+        if isinstance(pid, str) and str(pid).isdigit():
+            pid = int(pid)
+        if not isinstance(pid, int):
+            continue
+        last_by_pid[pid] = ev
+    live_unreaped: list[dict[str, Any]] = []
+    for pid, ev in last_by_pid.items():
+        if ev.get("action") != "spawn":
+            continue
+        if Path(f"/proc/{pid}").is_dir():
+            live_unreaped.append({
+                "pid": pid,
+                "role": ev.get("role"),
+                "issue": ev.get("issue"),
+                "phase": ev.get("phase"),
+                "ts": ev.get("ts"),
+            })
+    return {
+        "recent": events[-40:],
+        "live_unreaped_spawns": live_unreaped,
+    }
+
+
 # --- State + logs ------------------------------------------------------------
 
 
@@ -502,6 +552,7 @@ class Dashboard:
             "processes": procs,
             "orchestrator_alive": bool(procs["orchestrators"]),
             "orchestrator_log_size": orch_log.stat().st_size if orch_log.is_file() else 0,
+            "subprocess_registry": subprocess_registry_view(self.afk_root),
         }
 
     def issue_view(self, state: dict[str, Any], procs: dict[str, Any]) -> dict[str, Any]:
