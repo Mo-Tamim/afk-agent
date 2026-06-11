@@ -40,6 +40,7 @@ supports the `[gh](https://cli.github.com/)` or
   - [You want to pause without killing the orchestrator](#scenario-you-want-to-pause-without-killing-the-orchestrator)
   - [Two orchestrators stepped on the same issue](#scenario-two-orchestrators-stepped-on-the-same-issue)
   - [The docs PR didn't auto-trigger](#scenario-the-docs-pr-didnt-auto-trigger)
+  - [You found an error in an ADR or PRD (or changed your mind)](#scenario-you-found-an-error-in-an-adr-or-prd-or-changed-your-mind)
 - [FAQ](#faq)
 - [Status](#status)
 - [License](#license)
@@ -53,6 +54,7 @@ graph LR
     P[afk-prd]
     S[afk-setup]
     R[afk-run]
+    AM[afk-amend]
   end
   subgraph AFK_skills["AFK internal skills (the orchestrator loads on demand)"]
     W[afk-workflow]
@@ -257,6 +259,7 @@ afk-agent/
 │   ├── afk-setup/SKILL.md          ← /afk-setup
 │   ├── afk-grill/SKILL.md          ← /afk-grill
 │   ├── afk-prd/SKILL.md            ← /afk-prd
+│   ├── afk-amend/SKILL.md          ← /afk-amend  (changed-decision recovery)
 │   ├── afk-run/SKILL.md            ← /afk-run  (chat-window driver)
 │   ├── afk-workflow/SKILL.md
 │   ├── afk-decompose/SKILL.md
@@ -485,6 +488,22 @@ The `docs-gate` only runs after every idle pass of the orchestrator. If yours st
 .afk/scripts/afk document     # opens docs PR for every PRD whose children
                               # are all closed and which isn't yet labeled afk-done
 ```
+
+### Scenario: You found an error in an ADR or PRD (or changed your mind)
+
+A wrong ADR, a PRD that misstated the work, a misunderstanding baked in at ADR-creation time, and a flat-out change of mind are all the **same event**: a recorded decision changed after it was written down. Use the `/afk-amend` skill — it routes the fix to the right action based on how far the decision has already travelled:
+
+```mermaid
+flowchart TD
+  Q{Where is the changed decision now?}
+  Q -->|"ADR/CONTEXT only, no PRD yet"| A["Rewrite ADR as superseding + update CONTEXT, merge to main"]
+  Q -->|"PRD open, not decomposed"| B["Fix ADR on main, then edit the tracker issue body"]
+  Q -->|"Decomposed, no child started"| C["Fix ADR on main, edit PRD, close+recreate affected children, re-decompose"]
+  Q -->|"Children in flight"| D["Fix ADR on main, edit/close open children, corrective children or follow-up PRD, rebase in-flight"]
+  Q -->|"PRD closed / shipped (afk-done)"| E["Forward-only: superseding ADR + NEW corrective PRD"]
+```
+
+The one rule that holds in every branch: **the corrected ADR/`CONTEXT.md` must be merged to the default branch first.** Every phase derives its worktree from `origin/main`, so an ADR sitting on an unmerged branch is invisible to every agent and the old, rejected decision gets re-implemented. AFK is forward-only — never reopen an `afk-done` PRD; supersede it with a new corrective PRD instead.
 
 ## FAQ
 

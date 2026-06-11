@@ -51,7 +51,7 @@ Steps 0–3 are **once per machine / once per repo**. Steps 4–10 happen
 
 ### What it is
 
-Pulls the nine `afk-*` skills into your agent's skills directory so
+Pulls the eleven `afk-*` skills into your agent's skills directory so
 they show up in autocomplete (`/afk-...`) and the agent loads them
 on demand.
 
@@ -64,7 +64,7 @@ npx skills add Mo-Tamim/afk-agent
 ```
 
 **What you see:** a one-line confirmation per skill, ending with
-something like `installed 10 skills to ~/.cursor/skills/afk-agent/`.
+something like `installed 11 skills to ~/.cursor/skills/afk-agent/`.
 
 > Don't have `npx skills` and don't want it? See
 > [INSTALLATION.md § Manual install](./INSTALLATION.md#manual-install-any-agent).
@@ -667,6 +667,30 @@ fresh. If the phase has already passed (e.g. `plan` is done), use
 `afk::state_phase_clear_completed` to redo it
 (see [EXTENDING.md § troubleshooting](./EXTENDING.md#troubleshooting)).
 
+### "I found an error in an ADR or PRD after the fact (or changed my mind)"
+
+A wrong ADR, a PRD that misstated the work, a misunderstanding baked in
+when the ADR was written, and a plain change of mind are all the same
+event — a recorded decision changed. Use the `/afk-amend` skill; it
+routes the fix by lifecycle state:
+
+- **ADR/CONTEXT only, no PRD yet** → write a superseding ADR, update
+  `CONTEXT.md`, merge to the default branch.
+- **PRD open, not decomposed** → fix the ADR on main, then edit the
+  tracker issue body.
+- **Decomposed, no child started** → fix the ADR on main, edit the PRD,
+  close + recreate the affected children, re-decompose.
+- **Children in flight** → fix the ADR on main, edit/close open
+  children, add corrective children or a follow-up PRD; the orchestrator
+  rebases in-flight children onto the fresh main.
+- **PRD closed / shipped (`afk-done`)** → forward-only: superseding ADR
+  plus a **new** corrective PRD. Never reopen an `afk-done` PRD.
+
+The invariant in every branch: the corrected ADR/`CONTEXT.md` must be
+**merged to the default branch first**. Every phase derives its worktree
+from `origin/main`, so an ADR on an unmerged branch is invisible to every
+agent and the rejected decision gets re-implemented.
+
 ### "I want to run two PRDs in parallel"
 
 Just decompose both. `afk run` doesn't care which PRD a child
@@ -742,6 +766,7 @@ ONE-TIME (per repo)
 PER PRD
   /afk-grill <idea>                       stress-test design → ADRs
   /afk-prd                                synthesize PRD → tracker issue
+  /afk-amend                              re-propagate a changed ADR/PRD decision
   /afk-run decompose <PRD#>               PRD → vertical-slice children
   /afk-run process queue                  inline orchestrator (small PRDs)
   .afk/scripts/afk run                    background orchestrator (big PRDs)

@@ -40,6 +40,16 @@ the repo's rules. `afk-setup` appends an `## AFK orchestrator`
 section to whichever rules file your repo uses (`AGENTS.md`,
 `CLAUDE.md`, `.cursorrules`, `GEMINI.md`, …).
 
+### Amend
+The act of re-propagating a decision that changed after it was
+recorded — a wrong `ADR`, a `PRD` that misstated the work, a
+misunderstanding baked in at ADR-creation time, or a designer who
+changed their mind. Handled by the `afk-amend` skill, which routes the
+fix by lifecycle state and enforces that the corrected ADR/`CONTEXT.md`
+lands on the default branch before any phase re-runs. Produces a
+`superseding ADR`, never a silent rewrite. See
+[skills/afk-amend/SKILL.md](../skills/afk-amend/SKILL.md).
+
 ### `afk` (the script)
 The single CLI entrypoint at `.afk/scripts/afk`. Dispatches to
 `setup`, `decompose`, `run`, `issue`, `document`, `status`,
@@ -490,7 +500,7 @@ test poorly and slice poorly. Compare to `deep module`.
 
 ### Skill
 A `SKILL.md` file with YAML frontmatter that an agent loads on
-demand. This repo ships ten of them under `skills/`. Discovered by
+demand. This repo ships eleven of them under `skills/`. Discovered by
 [skills.sh](https://www.skills.sh/) via `package.json`'s
 `skills.directory` field.
 
@@ -506,6 +516,13 @@ names and doc filenames.
 `.afk/state/issue-N.json`. Per-issue JSON with the resume cursor
 (`completed_phases`), the branch, the PR number, and a history
 log. Updated atomically via `jq`-into-tempfile-then-`mv`.
+
+### Superseding ADR
+A new `ADR` that replaces an earlier one whose decision changed. Its
+`## Status` reads `Supersedes ADR-NNNN`; the old ADR's status flips to
+`Superseded by ADR-MMMM`. The history is preserved, not rewritten —
+this is how `amend` corrects a recorded decision. Written via the
+`afk-amend` skill.
 
 ---
 

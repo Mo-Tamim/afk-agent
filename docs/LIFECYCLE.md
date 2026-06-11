@@ -154,3 +154,12 @@ flowchart LR
 The alarm stops automatically at the start of the next agent turn (per
 the `notify-developer` contract), so the developer never has to
 manually silence it.
+
+### Changed-decision recovery
+
+A different kind of escape hatch: when the **decision itself** turns out
+wrong — a bad ADR, a misstated PRD, or a change of mind — there is no
+"rewind". Use the `/afk-amend` skill to re-propagate the corrected
+decision by lifecycle state, always landing the fixed ADR/`CONTEXT.md`
+on the default branch first. See
+[WORKFLOW.md § "I found an error in an ADR or PRD"](./WORKFLOW.md#i-found-an-error-in-an-adr-or-prd-after-the-fact-or-changed-my-mind).
