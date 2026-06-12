@@ -26,6 +26,13 @@ When the active phase prompt names a skill, read it from
 the `afk-agent` bundle). The orchestrator never re-injects skill
 contents into the prompt — load on demand.
 
+If any agent (or you) spots something fishy — a broken invariant, a
+latent defect, a failing edge case — **outside** the current task's
+scope, file it with the `afk-bug` skill instead of fixing it inline or
+ignoring it. It investigates, writes a decision-linked bug report (which
+ADRs/PRDs break, severity, blast radius, fix-vs-no-fix), and routes the
+fix back into the pipeline. See `.afk/skills/afk-bug/SKILL.md`.
+
 ### Daily commands
 
 ```bash

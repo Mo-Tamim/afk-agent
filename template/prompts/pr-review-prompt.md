@@ -36,6 +36,11 @@ Read before acting:
    `ISSUE_ID = {{ISSUE_ID}}`) and verify the diff actually meets the
    acceptance criteria.
 
+If you notice a defect **outside this PR's scope** (a latent bug this
+diff merely brushes past), file it via `.afk/skills/afk-bug/SKILL.md`
+rather than blocking this PR for it. Block only on problems with *this*
+diff.
+
 ## Outcome
 
 If the PR looks good, approve via the tracker CLI's approve verb and

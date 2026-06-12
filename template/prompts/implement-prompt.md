@@ -84,6 +84,15 @@ project (skip silently if missing):
 A non-zero exit from a check that **exists** must be fixed before
 committing. Missing checks are fine — note in the commit body.
 
+## Out-of-scope defects
+
+If you notice something fishy **outside this issue's scope** — a broken
+invariant, a latent bug, a failing edge case in neighboring code — do
+**not** fix it here (that breaks the vertical slice). File it via
+`.afk/skills/afk-bug/SKILL.md` (capture-and-file path), drop a one-line
+pointer in your status comment, and carry on. Only `BLOCKED` if the
+defect actually prevents *this* issue's work.
+
 ## Commit
 
 ```

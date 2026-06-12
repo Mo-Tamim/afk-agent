@@ -51,7 +51,7 @@ Steps 0–3 are **once per machine / once per repo**. Steps 4–10 happen
 
 ### What it is
 
-Pulls the eleven `afk-*` skills into your agent's skills directory so
+Pulls the twelve `afk-*` skills into your agent's skills directory so
 they show up in autocomplete (`/afk-...`) and the agent loads them
 on demand.
 
@@ -64,7 +64,7 @@ npx skills add Mo-Tamim/afk-agent
 ```
 
 **What you see:** a one-line confirmation per skill, ending with
-something like `installed 11 skills to ~/.cursor/skills/afk-agent/`.
+something like `installed 12 skills to ~/.cursor/skills/afk-agent/`.
 
 > Don't have `npx skills` and don't want it? See
 > [INSTALLATION.md § Manual install](./INSTALLATION.md#manual-install-any-agent).
@@ -691,6 +691,38 @@ The invariant in every branch: the corrected ADR/`CONTEXT.md` must be
 from `origin/main`, so an ADR on an unmerged branch is invisible to every
 agent and the rejected decision gets re-implemented.
 
+### "Something looks broken — I (or an agent) want to raise a bug"
+
+A bug is different from an amend. An **amend** is when the *decision*
+changed (the ADR/PRD was wrong). A **bug** is when reality diverged from a
+decision that is still correct — the code doesn't do what the ADR/PRD
+says. Use the `/afk-bug` skill. It works two ways:
+
+- **You, debugging:** `/afk-bug the invoice total is off by a cent on
+  multi-currency carts`. The agent investigates (reproduces, finds
+  evidence), traces the defect to the ADRs/PRDs it breaks, rates its
+  severity, and files a decision-linked bug on the tracker.
+- **An agent, mid-run:** when a phase agent (implement / review /
+  pr-review) notices a defect *outside* its current slice, it files it
+  with `afk-bug` instead of silently fixing it (which would bloat the PR)
+  or ignoring it — then carries on with its own issue.
+
+The filed bug always states **what breaks**, **which ADR/PRD it
+violates or threatens**, the **blast radius**, the **severity & urgency**,
+and the **impact of fixing vs. not fixing**. It then routes itself:
+
+```mermaid
+flowchart TD
+  Q{What kind of bug?}
+  Q -->|"Code violates a still-correct decision"| K1["CODE-WRONG → corrective slice<br/>(ready-for-agent) or corrective PRD"]
+  Q -->|"The decision itself is wrong"| K2["DECISION-WRONG → /afk-amend<br/>(superseding ADR first)"]
+  Q -->|"No decision covers it"| K3["UNSPECIFIED → /afk-grill then /afk-prd"]
+```
+
+For an `S1` bug (data loss, security, prod-down, money-wrong) the skill
+also pauses any in-flight work it would corrupt by labelling it
+`afk-blocked`.
+
 ### "I want to run two PRDs in parallel"
 
 Just decompose both. `afk run` doesn't care which PRD a child
@@ -767,6 +799,7 @@ PER PRD
   /afk-grill <idea>                       stress-test design → ADRs
   /afk-prd                                synthesize PRD → tracker issue
   /afk-amend                              re-propagate a changed ADR/PRD decision
+  /afk-bug <symptom>                      investigate + file a decision-linked bug
   /afk-run decompose <PRD#>               PRD → vertical-slice children
   /afk-run process queue                  inline orchestrator (small PRDs)
   .afk/scripts/afk run                    background orchestrator (big PRDs)
