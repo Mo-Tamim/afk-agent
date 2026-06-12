@@ -150,8 +150,13 @@ browser at the dashboard URL automatically. Use `--no-browser` to skip.
   under this repo's tree, scanned from `/proc/<pid>/cmdline`).
 - PID, uptime, child runner PIDs and the issues they're driving,
   active phase processes, active cursor-agent processes.
-- `phases cfg` is `phases:` from `.afk/config.yml` — the source of
-  truth for the per-issue pipeline.
+- `phases cfg (child)` is `phases:` from `.afk/config.yml` — the
+  pipeline for vertical-slice **child** issues.
+- `phases cfg (PRD)` is `prd_phases:` when present, else a built-in
+  default (`decompose` → `document` → `pr` → `pr_review` → `pr_merge`).
+  The server classifies a row as a PRD when state shows a `docs-prd-`
+  branch, `decompose` / `document` in `history`, or those phases in
+  `completed_phases`.
 
 ### Subprocess registry (left, below Orchestrator)
 - Tail of `.afk/logs/subprocess-registry.ndjson` (spawn / reap audit).

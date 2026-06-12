@@ -23,6 +23,14 @@ phases:
   - pr_review
   - pr_merge
 
+# === PRD pipeline (dashboard + mental model; docs-gate drives document→pr→…) ===
+prd_phases:
+  - decompose
+  - document
+  - pr
+  - pr_review
+  - pr_merge
+
 # === Timeouts ===
 issue_timeout_seconds: 7200       # Max wall time per issue. 0 = unlimited.
 ci_poll_interval_seconds: 30

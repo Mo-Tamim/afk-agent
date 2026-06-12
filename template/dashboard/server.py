@@ -37,6 +37,9 @@ from urllib.parse import parse_qs, urlparse
 # Matches .afk/config.yml::phases. We also accept the "pr-review" hyphen
 # variant some prompts use; the dashboard normalises both to "pr_review".
 DEFAULT_PHASES = ["plan", "implement", "review", "pr", "pr_wait_ci", "pr_review", "pr_merge"]
+# PRD issues: decompose (afk decompose) then docs-gate (document → pr → pr_review → merge).
+# No pr_wait_ci row — CI for the docs PR is polled inline in document-gate.sh, not run-phase.
+DEFAULT_PRD_PHASES = ["decompose", "document", "pr", "pr_review", "pr_merge"]
 # Reconcile the historical naming drift between config.yml and the scripts:
 #   - config.yml lists `pr_merge`
 #   - run-issue.sh records the final phase as `merge` in completed_phases
@@ -62,6 +65,21 @@ def denormalise_phase(p: str) -> list[str]:
     return list(seeds)
 
 
+def is_prd_issue_state(state: dict[str, Any]) -> bool:
+    """True when this state file is for a PRD (not a vertical-slice child)."""
+    branch = (state.get("branch") or "").lower()
+    if "docs-prd-" in branch:
+        return True
+    for h in state.get("history") or []:
+        ph = h.get("phase")
+        if ph in ("decompose", "document"):
+            return True
+    completed = [normalise_phase(p) for p in (state.get("completed_phases") or [])]
+    if "decompose" in completed or "document" in completed:
+        return True
+    return False
+
+
 # --- AFK repo discovery ------------------------------------------------------
 
 
@@ -78,7 +96,7 @@ def find_afk_root(start: Path) -> Path:
 
 # --- Tiny config reader ------------------------------------------------------
 # We mirror lib/common.sh's grep-based parser; no yq dependency. Only
-# top-level scalars and one level of nesting (`phases:` list).
+# top-level scalars and one level of nesting (`phases:` / `prd_phases:` lists).
 
 
 def read_config(afk_dir: Path) -> dict[str, Any]:
@@ -88,16 +106,26 @@ def read_config(afk_dir: Path) -> dict[str, Any]:
         return cfg
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     phases: list[str] = []
+    prd_phases: list[str] = []
     in_phases = False
+    in_prd_phases = False
     for raw in lines:
         line = raw.rstrip()
         if not line or line.lstrip().startswith("#"):
             if in_phases and (line.startswith(" ") or line.startswith("\t")):
                 continue
             in_phases = False
+            if in_prd_phases and (line.startswith(" ") or line.startswith("\t")):
+                continue
+            in_prd_phases = False
             continue
         if line.startswith("phases:"):
             in_phases = True
+            in_prd_phases = False
+            continue
+        if line.startswith("prd_phases:"):
+            in_prd_phases = True
+            in_phases = False
             continue
         if in_phases:
             m = re.match(r"^\s+-\s+(.+?)\s*(#.*)?$", line)
@@ -106,6 +134,13 @@ def read_config(afk_dir: Path) -> dict[str, Any]:
                 continue
             else:
                 in_phases = False
+        if in_prd_phases:
+            m = re.match(r"^\s+-\s+(.+?)\s*(#.*)?$", line)
+            if m:
+                prd_phases.append(m.group(1).strip().strip('"').strip("'"))
+                continue
+            else:
+                in_prd_phases = False
         m = re.match(r"^([a-zA-Z_][a-zA-Z0-9_]*):\s*(.*?)\s*(#.*)?$", line)
         if m:
             key, val = m.group(1), m.group(2)
@@ -114,6 +149,8 @@ def read_config(afk_dir: Path) -> dict[str, Any]:
                 cfg[key] = val
     if phases:
         cfg["phases"] = phases
+    if prd_phases:
+        cfg["prd_phases"] = prd_phases
     return cfg
 
 
@@ -537,6 +574,14 @@ class Dashboard:
         ps = self.cfg.get("phases") or DEFAULT_PHASES
         return [normalise_phase(p) for p in ps]
 
+    @property
+    def prd_phases(self) -> list[str]:
+        ps = self.cfg.get("prd_phases") or DEFAULT_PRD_PHASES
+        return [normalise_phase(p) for p in ps]
+
+    def phases_for_state(self, state: dict[str, Any]) -> list[str]:
+        return self.prd_phases if is_prd_issue_state(state) else self.phases
+
     def summary(self) -> dict[str, Any]:
         procs = scan_afk_processes(self.afk_root)
         orch_log = self.afk_dir / "logs" / "orchestrator.log"
@@ -548,6 +593,7 @@ class Dashboard:
             "max_parallel": self.cfg.get("max_parallel"),
             "merge_mode": self.cfg.get("merge_mode"),
             "phases": self.phases,
+            "prd_phases": self.prd_phases,
             "now": datetime.now(tz=timezone.utc).isoformat(),
             "processes": procs,
             "orchestrator_alive": bool(procs["orchestrators"]),
@@ -573,8 +619,9 @@ class Dashboard:
         # (when run-phase.sh created the log dir) to the log file's
         # mtime (last write). This is the most accurate signal we have
         # without telemetry events present.
+        phase_list = self.phases_for_state(state)
         pipeline = []
-        for ph in self.phases:
+        for ph in phase_list:
             run = None
             for variant in denormalise_phase(ph):
                 run = latest_per_phase.get(variant)
@@ -629,6 +676,7 @@ class Dashboard:
             "pr": pr_num,
             "pr_info": pr_info if isinstance(pr_info, dict) else None,
             "ci": ci,
+            "issue_kind": "prd" if is_prd_issue_state(state) else "child",
         }
 
     def issues(self) -> list[dict[str, Any]]:

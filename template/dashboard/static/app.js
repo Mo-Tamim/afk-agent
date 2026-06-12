@@ -87,7 +87,8 @@
       ["runners", s.processes.runners.map(r => `#${r.issue} (pid ${r.pid})`).join(", ") || "—"],
       ["phases", s.processes.phases.map(p => `#${p.issue}/${p.phase}`).join(", ") || "—"],
       ["agents", s.processes.agents.length],
-      ["phases cfg", (s.phases || []).join(" → ")],
+      ["phases cfg (child)", (s.phases || []).join(" → ")],
+      ["phases cfg (PRD)", (s.prd_phases || []).join(" → ")],
     ];
     for (const [k, v] of rows) {
       panel.appendChild(el("div", { class: "k" }, k));
