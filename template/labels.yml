@@ -33,3 +33,7 @@ labels:
   - name: afk-docs
     color: 0075CA
     description: Issue tracks the dev+user documentation pass for a PRD.
+
+  - name: afk-bug
+    color: D73A4A
+    description: Decision-linked defect report filed via the afk-bug skill.

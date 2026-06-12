@@ -19,6 +19,7 @@ supports the `[gh](https://cli.github.com/)` or
 ## Table of contents
 
 - [What's in the box](#whats-in-the-box)
+  - [Skills at a glance](#skills-at-a-glance)
 - [Features](#features)
 - [The three-step user flow](#the-three-step-user-flow)
 - [Quick start (5 minutes)](#quick-start-5-minutes)
@@ -41,6 +42,7 @@ supports the `[gh](https://cli.github.com/)` or
   - [Two orchestrators stepped on the same issue](#scenario-two-orchestrators-stepped-on-the-same-issue)
   - [The docs PR didn't auto-trigger](#scenario-the-docs-pr-didnt-auto-trigger)
   - [You found an error in an ADR or PRD (or changed your mind)](#scenario-you-found-an-error-in-an-adr-or-prd-or-changed-your-mind)
+  - [You (or an agent) found a bug](#scenario-you-or-an-agent-found-a-bug)
 - [FAQ](#faq)
 - [Status](#status)
 - [License](#license)
@@ -55,6 +57,7 @@ graph LR
     S[afk-setup]
     R[afk-run]
     AM[afk-amend]
+    B[afk-bug]
   end
   subgraph AFK_skills["AFK internal skills (the orchestrator loads on demand)"]
     W[afk-workflow]
@@ -72,6 +75,7 @@ graph LR
   end
   G -->|writes ADRs + CONTEXT.md| Repo[(Your repo)]
   P -->|publishes PRD issue| Tracker[(GitHub / GitLab)]
+  B -->|files decision-linked bug| Tracker
   S -->|scaffolds| Scaffold
   R -->|drives from chat| Scaffold
   Scaffold -->|drives| Orchestrator{{afk orchestrator}}
@@ -80,7 +84,26 @@ graph LR
   Orchestrator -->|commits to| Repo
 ```
 
+### Skills at a glance
 
+Twelve skills ship in this bundle. The **user-facing** ones you invoke
+from chat (`/afk-…`); the **internal** ones the orchestrator loads on
+demand when a phase prompt names them — you rarely call those directly.
+
+| Skill | Invoked by | When / where in the flow | What it does |
+|-------|------------|--------------------------|--------------|
+| `afk-setup` | You | Once per repo, before anything else | Scaffolds `.afk/` (config, labels, prompts, scripts, templates) and wires it into your agent rules file. |
+| `afk-grill` | You | Start of a PRD, before code | Stress-tests a design one question at a time; captures decisions as ADRs and `CONTEXT.md` entries. |
+| `afk-prd` | You | Right after `afk-grill` | Synthesizes the grilling into a PRD and opens it as a tracker issue (`afk-prd`, `ready-for-agent`). |
+| `afk-run` | You | Any time you want to drive AFK from chat | Chat-window driver for `decompose` / `run` / `status`; spawns the orchestrator detached when a run outlasts the chat tool. |
+| `afk-amend` | You | A recorded **decision changed** (ADR/PRD wrong, or you changed your mind) | Routes the fix by lifecycle state; writes a superseding ADR and lands it on the default branch first. |
+| `afk-bug` | You **or** a phase agent | A **defect** is found (reality diverged from a still-correct decision); agents use it for out-of-scope finds | Investigates, files a decision-linked bug (what breaks, which ADRs/PRDs, severity, blast radius, fix-vs-no-fix), and routes it. |
+| `afk-workflow` | Orchestrator (internal) | Every phase — shared mental model | Defines the phase lifecycle, branching rules, sentinels, locks, and idempotency contract. |
+| `afk-decompose` | Orchestrator (internal) | `decompose` phase | Slices one PRD into vertical-slice child issues using the tracer-bullet pattern. |
+| `afk-tdd` | Orchestrator (internal) | `implement` phase | Drives red→green→refactor so each slice ships with behavior-level tests. |
+| `afk-document` | Orchestrator (internal) | `document` phase (last child of a PRD closed) | Writes dev + user docs (mermaid required), opens and merges the docs PR. |
+| `afk-tracker-issue` | Orchestrator (internal) | Any phase that reads/writes an **issue** | Tracker-agnostic issue CRUD (fetch, comment, label, close) over `gh` / `glab`. |
+| `afk-tracker-pr` | Orchestrator (internal) | `pr`, `pr_review`, `pr_merge` phases | Tracker-agnostic PR/MR ops (push, open, poll CI, diff, review, merge). |
 
 > **Two ways to run.** Every command shown below works **inside your
 > IDE chat** (Cursor / Copilot / Claude / Codex / Windsurf / Gemini)
@@ -260,6 +283,7 @@ afk-agent/
 │   ├── afk-grill/SKILL.md          ← /afk-grill
 │   ├── afk-prd/SKILL.md            ← /afk-prd
 │   ├── afk-amend/SKILL.md          ← /afk-amend  (changed-decision recovery)
+│   ├── afk-bug/SKILL.md            ← /afk-bug  (decision-linked defect reports)
 │   ├── afk-run/SKILL.md            ← /afk-run  (chat-window driver)
 │   ├── afk-workflow/SKILL.md
 │   ├── afk-decompose/SKILL.md
@@ -505,6 +529,25 @@ flowchart TD
 
 The one rule that holds in every branch: **the corrected ADR/`CONTEXT.md` must be merged to the default branch first.** Every phase derives its worktree from `origin/main`, so an ADR sitting on an unmerged branch is invisible to every agent and the old, rejected decision gets re-implemented. AFK is forward-only — never reopen an `afk-done` PRD; supersede it with a new corrective PRD instead.
 
+### Scenario: You (or an agent) found a bug
+
+A **bug** is reality diverging from a decision that is *still correct* — the code doesn't do what an ADR/PRD says. (Contrast with an **amend**, above, where the decision itself changed.) Use the `/afk-bug` skill. It serves two callers:
+
+- **You, debugging:** `/afk-bug payments are double-charged on retry`. The agent reproduces it, traces it to the ADRs/PRDs it breaks, rates severity, and files a decision-linked bug.
+- **A phase agent, mid-run:** when `implement` / `review` / `pr-review` notices a defect *outside* its slice, it files it via `afk-bug` instead of silently fixing it (slice creep) or dropping it on the floor — then finishes its own issue.
+
+Every `afk-bug` issue states what breaks, **which ADR/PRD it violates or threatens**, the blast radius, the severity & urgency, and the **impact of fixing vs. not fixing** — then routes the fix:
+
+```mermaid
+flowchart TD
+  Q{What kind of bug?}
+  Q -->|"Code violates a still-correct decision"| K1["CODE-WRONG → corrective slice (ready-for-agent)<br/>or corrective PRD via /afk-prd"]
+  Q -->|"The decision itself is wrong"| K2["DECISION-WRONG → /afk-amend<br/>(superseding ADR lands first)"]
+  Q -->|"No decision covers it"| K3["UNSPECIFIED → /afk-grill then /afk-prd"]
+```
+
+For an **S1** bug (data loss, security, prod-down, money-wrong) the skill also labels any in-flight work it would corrupt `afk-blocked` so the orchestrator pauses it. See [skills/afk-bug/SKILL.md](./skills/afk-bug/SKILL.md).
+
 ## FAQ
 
 ### Q: What happens if I close my laptop mid-run?
@@ -572,6 +615,10 @@ Set `merge_mode: gated` in `.afk/config.yml`. On green CI + approved self-review
 ### Q: The agent emitted `NO_CHANGES` — did anything happen?
 
 Yes: the orchestrator recorded the phase as done and advanced. `NO_CHANGES` means the phase had nothing to do (e.g. the reviewer found nothing to clean up). **Exception:** from the `implement` phase, `NO_CHANGES` is a graceful bail — no PR is opened.
+
+### Q: An agent found a bug while working on something else — what happens?
+
+It files it with the `afk-bug` skill and keeps going. The phase prompts (`implement`, `review`, `pr-review`) tell agents not to fix out-of-scope defects inline — that breaks the vertical slice — and not to ignore them either. Instead they raise a decision-linked bug (which ADRs/PRDs break, severity, blast radius, fix-vs-no-fix) on the tracker, labelled `afk-bug`, and finish their own issue. You triage the bug later, or — if it's `ready-for-agent` and agent-sized — let `afk run` pick up the fix. See [skills/afk-bug/SKILL.md](./skills/afk-bug/SKILL.md).
 
 ### Q: How do I upgrade an existing repo to a newer AFK?
 

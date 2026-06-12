@@ -66,6 +66,14 @@ A `label` the orchestrator applies to any issue whose phase
 emitted `BLOCKED`. Tells the orchestrator (and you) "skip this until
 fixed".
 
+### `afk-bug`
+A `label` applied to a defect report filed via the `afk-bug` skill. The
+report is **decision-linked**: it names the `ADR`s and `PRD`s the bug
+violates or threatens, its `severity`, its blast radius, and the
+fix-vs-no-fix trade-off. Carries a routing label alongside it
+(`ready-for-agent`, `needs-human`, …). See
+[skills/afk-bug/SKILL.md](../skills/afk-bug/SKILL.md).
+
 ### `afk-child`
 A `label` applied to every child issue produced by the
 `decompose` phase. The orchestrator's pool only pulls from this
@@ -107,6 +115,16 @@ The `<promise>BLOCKED</promise>` tag a phase agent emits when it
 cannot proceed without human input. The orchestrator stops the
 phase, applies `afk-blocked`, and (per `config.yml`) triggers
 `notify-developer`.
+
+### Bug
+Observed behavior that contradicts an *intended* behavior — and in AFK
+intended behavior is recorded (an `ADR`, a `PRD` acceptance criterion, a
+`CONTEXT.md` invariant, or shipped code). Raised via the `afk-bug` skill,
+which classifies each bug as **CODE-WRONG** (code violates a correct
+decision → corrective fix), **DECISION-WRONG** (the decision itself is
+wrong → route to `afk-amend`), or **UNSPECIFIED** (no decision covers it →
+`afk-grill` then `afk-prd`). Distinct from `Amend`: a bug is reality
+diverging from a decision; an amend is the decision itself changing.
 
 ---
 
@@ -493,6 +511,13 @@ The standard Linux/macOS incantation for "detach this process
 completely, no controlling terminal, ignore SIGHUP". Used to spawn
 a true-background `afk run`.
 
+### Severity
+How bad a `bug`'s impact is, on an S1–S4 scale used by the `afk-bug`
+skill: **S1** (data loss / security / prod-down / money-wrong),
+**S2** (core flow broken, no workaround), **S3** (degraded, workaround
+exists), **S4** (cosmetic). Distinct from *urgency* (how fast it must be
+fixed) — a cosmetic bug can be urgent and a severe one can wait.
+
 ### Shallow module
 A module whose interface mirrors its implementation, so changing
 the implementation forces interface changes. Avoid these — they
@@ -500,7 +525,7 @@ test poorly and slice poorly. Compare to `deep module`.
 
 ### Skill
 A `SKILL.md` file with YAML frontmatter that an agent loads on
-demand. This repo ships eleven of them under `skills/`. Discovered by
+demand. This repo ships twelve of them under `skills/`. Discovered by
 [skills.sh](https://www.skills.sh/) via `package.json`'s
 `skills.directory` field.
 
@@ -601,6 +626,7 @@ The colors used by `labels.yml`:
 | `afk-prd`          | 1D76DB  | blue — "spec"         |
 | `afk-child`        | BFD4F2  | pale blue — "slice"   |
 | `afk-docs`         | 0075CA  | medium blue — "docs"  |
+| `afk-bug`          | D73A4A  | red — "defect"        |
 
 ---
 

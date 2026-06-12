@@ -53,6 +53,10 @@ Do **not**:
 - Add abstractions speculatively.
 - Refactor for taste alone.
 
+If you spot a real defect **outside this issue's scope**, file it via
+`.afk/skills/afk-bug/SKILL.md` instead of fixing it here — keep this
+review behavior-preserving and on-scope.
+
 ## Execution
 
 If you find issues:
