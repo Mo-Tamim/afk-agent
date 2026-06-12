@@ -3,6 +3,11 @@
 `afk-agent` is structured to be discoverable by [skills.sh](https://www.skills.sh/)
 as a multi-skill bundle.
 
+> Adding a feature? Run the full
+> [update & release checklist](./EXTENDING.md#ship-a-feature--the-update--release-checklist)
+> — doc-sync, version bump, publish, and downstream upgrade — not just the
+> publish step below.
+
 ## How skills.sh discovers skills
 
 ```mermaid
