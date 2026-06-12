@@ -203,6 +203,111 @@ templates, quality gates, and failure modes.)
 Re-publish via `npx skills add <repo>` or whatever you use; the new
 skill ships alongside the existing `afk-*` family.
 
+## Ship a feature — the update & release checklist
+
+Adding the code (above) is only half the job. A feature isn't "shipped"
+until the **docs are in sync**, the **version is bumped**, it's
+**published**, and **existing repos can pull it**. Run this loop every
+time you land a feature.
+
+```mermaid
+flowchart TD
+  A[1. Build the change<br/>see sections above] --> B[2. Sync docs & cross-refs]
+  B --> C[3. Bump version + CHANGELOG]
+  C --> D[4. Commit, PR, review, merge to main]
+  D --> E[5. Tag + publish to skills.sh]
+  E --> F[6. Upgrade existing repos<br/>install.sh --force / npx skills add]
+```
+
+### 1. Build the change
+
+Use the matching recipe above (new phase / tracker / runner / skill /
+label / dashboard panel / telemetry event).
+
+### 2. Sync docs and cross-references
+
+This is the step that rots fastest. Which files to touch depends on
+**what** you added:
+
+| You added… | Update these |
+|------------|--------------|
+| **A skill** | `README.md` (the *What's in the box* mermaid diagram, the *Skills at a glance* table, and the repo-layout tree), `docs/GLOSSARY.md` (a term entry + the skill **count** "ships N of them"), `docs/WORKFLOW.md` (the skill count in step 0 **and** the `installed N skills` line; cheat-sheet if user-facing). If it's a recovery/escape-hatch skill, add a *Scenario* to `README.md` and `WORKFLOW.md`. |
+| **A label** | `template/labels.yml` (the source of truth), `docs/GLOSSARY.md` (term entry **and** the colour table at the bottom). Existing repos pick it up only after `afk setup` (see step 6). |
+| **A phase** | `docs/LIFECYCLE.md` (phase reference table + sentinel diagram), `docs/WORKFLOW.md` (per-child sequence), `docs/ARCHITECTURE.md` (layer map), `template/AGENTS.md.snippet` (phase-lifecycle line), `template/config.yml` (doc comment). |
+| **A tracker** | `skills/afk-tracker-issue/SKILL.md`, `skills/afk-tracker-pr/SKILL.md`, `docs/EXTENDING.md` (mention support), `README.md` (tracker-agnostic claims). |
+| **A dashboard panel / telemetry event** | `docs/DASHBOARD.md`, `docs/LIFECYCLE.md § Telemetry events` (for events). |
+
+> **Skill-count grep.** After any skill add/remove, make sure no stale
+> count survives:
+>
+> ```bash
+> git grep -nE "eleven|twelve|installed [0-9]+ skills|ships [a-z]+ of them"
+> ```
+>
+> Update every hit so the diagram, the table, the tree, and the prose
+> counts agree.
+
+### 3. Bump the version and the changelog
+
+Follow the semver discipline in
+[PUBLISHING.md § Version & changelog](./PUBLISHING.md#version--changelog-discipline):
+
+- Edit `package.json`'s `version`.
+- Add a `CHANGELOG.md` entry (create the file if missing) summarising the
+  delta — one line per user-visible change.
+- Choose the bump: **patch** (doc/typo/fix), **minor** (new skill, new
+  tracker, new optional config), **major** (changed sentinel contract,
+  renamed config keys, removed phase — anything that breaks existing
+  `.afk/` installs).
+
+### 4. Commit, PR, review, merge
+
+Land it on the default branch through a normal PR (the same loop you'd
+run for any change). Keep the commit message scoped, e.g.
+`feat(afk-bug): add decision-linked bug-reporting skill`.
+
+### 5. Tag and publish
+
+```bash
+git tag vX.Y.Z
+git push --tags
+```
+
+Then follow [PUBLISHING.md § Publish](./PUBLISHING.md#publish) to push to
+the public repo and let skills.sh re-crawl. Verify with
+`npx skills search afk-agent` — the new skill (and the updated count)
+should appear.
+
+### 6. Upgrade existing repos
+
+A feature in the bundle does **not** reach a repo that already ran
+`afk-setup` until that repo refreshes its `.afk/` scaffold.
+
+```bash
+# From a checkout of the afk-agent toolkit, pointed at the target repo:
+./install.sh --force --no-rules-edit \
+  --target /path/to/your/repo \
+  --tracker github --repo owner/repo \
+  --runner cursor-agent --merge-mode auto
+```
+
+`--force` refreshes `prompts/`, `scripts/`, `templates/`, `labels.yml`,
+`dashboard/`, and `.afk/skills/`, but **keeps** `config.yml`, `state/`,
+`worktrees/`, and `logs/`. Then, because `labels.yml` changed, register
+any new labels on the tracker:
+
+```bash
+.afk/scripts/afk setup        # idempotent; creates only missing labels
+```
+
+Users who installed the skills via `npx` also re-run
+`npx skills add <handle>/afk-agent` to pull the new `SKILL.md` files into
+their agent's skills directory.
+
+> **Heads-up:** `install.sh --force` overwrites `.afk/labels.yml` with the
+> bundle's copy. If a downstream repo hand-edited that file, reconcile
+> before refreshing.
+
 ## Troubleshooting
 
 ```mermaid
