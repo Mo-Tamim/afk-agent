@@ -56,14 +56,19 @@ awk '
       fi
       ;;
     gitlab)
-      # `glab label list` output is line-based with leading whitespace; the
-      # `^\s*name(\s|$)` anchor avoids false matches on substrings.
-      if glab label list -R "$REPO" 2>/dev/null | grep -qE "^\s*$name(\s|$)"; then
+      # `glab label list` rows are "<id> <name> <color> <desc>", so the
+      # label name is a whitespace-delimited field (not line-anchored).
+      # Match it as a standalone column via awk to avoid substring hits.
+      if glab label list -R "$REPO" 2>/dev/null | awk -v n="$name" '{for(i=1;i<=NF;i++) if($i==n){found=1}} END{exit found?0:1}'; then
         afk::log "label '$name' already exists"
       else
         # glab wants `#RRGGBB`; gh wants `RRGGBB`. Match each CLI's syntax.
-        glab label create -R "$REPO" -n "$name" -c "#$color" -d "$desc" >/dev/null 2>&1 && \
+        # Never let a failed create abort the whole run under `set -e`.
+        if glab label create -R "$REPO" -n "$name" -c "#$color" -d "$desc" >/dev/null 2>&1; then
           afk::log "label '$name' created"
+        else
+          afk::warn "could not create label '$name' (may already exist)"
+        fi
       fi
       ;;
   esac
