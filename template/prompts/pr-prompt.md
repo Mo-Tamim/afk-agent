@@ -46,7 +46,10 @@ routes to `gh pr create` or `glab mr create` based on
 `.afk/config.yml`'s `tracker:` value.
 
 The PR body **must** contain `Closes #{{ISSUE_ID}}`. The body file
-already does — do not edit it.
+already does — do not edit it. It also carries a detailed summary, a
+test plan, and a `## Smoke test` section rendered from the implement
+phase's handoff; the merge phase re-runs that smoke test and appends the
+evidence, so leave the body intact.
 
 ## Output
 

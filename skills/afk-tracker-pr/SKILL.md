@@ -116,7 +116,47 @@ GitLab review comment:
 glab mr note "$PR_NUMBER" -R "$REPO" --message "$REVIEW_BODY"
 ```
 
-### 5. Merge
+### 5. Read the PR body
+
+Fetch the rendered PR/MR body (summary, test plan, `## Smoke test`
+section, evidence comments are separate):
+
+GitHub:
+
+```bash
+gh pr view "$PR_NUMBER" -R "$REPO" --json body --jq '.body'
+```
+
+GitLab:
+
+```bash
+glab mr view "$PR_NUMBER" -R "$REPO" --output json | jq -r '.description // .body // ""'
+```
+
+### 6. Comment on the PR (evidence / notes)
+
+A plain top-level comment. The **issue runner** uses this
+deterministically to attach **smoke-test evidence** before merging
+(see `afk::tracker::pr_comment` in `lib/tracker.sh`); agents may also
+use it for notes. This is *not* a review verdict — use the
+review-comment verb (operation 4) for approve/request-changes.
+
+GitHub:
+
+```bash
+gh pr comment "$PR_NUMBER" -R "$REPO" --body-file "$EVIDENCE_FILE"
+```
+
+GitLab:
+
+```bash
+glab mr note "$PR_NUMBER" -R "$REPO" --message "$(cat "$EVIDENCE_FILE")"
+```
+
+Prefer `--body-file` / a file so multi-line fenced output survives
+shell quoting intact. Never paste secrets, tokens, or full diffs.
+
+### 7. Merge
 
 GitHub squash-merge:
 

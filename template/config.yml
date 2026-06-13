@@ -36,6 +36,18 @@ issue_timeout_seconds: 7200       # Max wall time per issue. 0 = unlimited.
 ci_poll_interval_seconds: 30
 ci_max_wait_seconds: 1800
 
+# === Smoke gate (deterministic; run by the issue runner before merge) ===
+# When true, after CI is green the runner executes the implement phase's
+# handoff.smoke_cmd in the issue worktree, posts the captured output as a
+# "Smoke test evidence" comment on the PR, and refuses to merge if it exits
+# non-zero. A smoke_cmd of "N/A" (or empty) skips execution and records why.
+# Off by default: running arbitrary per-repo smoke commands needs a runnable
+# worktree environment and overlaps with CI — opt in once your smoke_cmds are
+# self-contained. The PR body and the final issue comment always carry the
+# human-readable smoke_test regardless of this flag.
+smoke_gate: false
+smoke_timeout_seconds: 600        # Max wall time for a single smoke_cmd run.
+
 # === Tracker labels (must exist; created automatically by `afk setup`) ===
 labels:
   ready_for_agent: ready-for-agent

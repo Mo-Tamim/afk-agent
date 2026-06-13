@@ -148,7 +148,18 @@ if afk::state_phase_completed "$ISSUE" implement; then
 else
   run_phase implement "PACKAGE=$PACKAGE"
   case "$PHASE_RC" in
-    0)  afk::state_phase_mark_completed "$ISSUE" implement ;;
+    0)
+      # Deterministic gate: a COMPLETE implement MUST have emitted a valid
+      # <handoff> payload — it feeds the PR body, the smoke gate, and the
+      # final issue comment. A missing/invalid handoff is a prompt violation,
+      # so we fail closed rather than papering over it with boilerplate.
+      HANDOFF_FILE="$AFK_LOGS/issue-${ISSUE}-implement-latest/handoff.json"
+      if [[ ! -s "$HANDOFF_FILE" ]] || ! jq empty "$HANDOFF_FILE" >/dev/null 2>&1; then
+        afk::tracker::issue_add_label "$ISSUE" "$BLOCKED_LBL"
+        afk::die "implement emitted COMPLETE but no valid <handoff> JSON at $HANDOFF_FILE"
+      fi
+      afk::state_phase_mark_completed "$ISSUE" implement
+      ;;
     10) afk::warn "implement returned NO_CHANGES; bailing without PR"; exit 0 ;;
     *)  afk::tracker::issue_add_label "$ISSUE" "$BLOCKED_LBL"; exit "$PHASE_RC" ;;
   esac
@@ -204,13 +215,30 @@ if afk::state_phase_completed "$ISSUE" pr; then
 else
   # Render the PR body from the template. The body must include
   # `Closes #ISSUE` so merging auto-closes the linked child issue.
+  #
+  # The implement phase emits a <handoff> JSON payload (summary, test
+  # plan, smoke test). We thread it in so every PR carries a detailed,
+  # human-readable description plus a copy-pasteable smoke test that the
+  # merge phase later re-runs for evidence. Missing/older handoffs fall
+  # back to generic copy.
+  HANDOFF_FILE="$AFK_LOGS/issue-${ISSUE}-implement-latest/handoff.json"
+  PR_SUMMARY="AFK-implemented per the linked issue's acceptance criteria."
+  PR_TEST_PLAN="Unit/integration tests added per the issue's test notes; CI is the source of truth."
+  PR_SMOKE_TEST="N/A — the implement phase recorded no smoke test; rely on CI."
+  if [[ -s "$HANDOFF_FILE" ]] && jq empty "$HANDOFF_FILE" >/dev/null 2>&1; then
+    _h_summary="$(jq -r '.summary    // ""' "$HANDOFF_FILE")"; [[ -n "$_h_summary"    ]] && PR_SUMMARY="$_h_summary"
+    _h_test="$(jq -r '.test_plan  // ""' "$HANDOFF_FILE")";    [[ -n "$_h_test"       ]] && PR_TEST_PLAN="$_h_test"
+    _h_smoke="$(jq -r '.smoke_test // ""' "$HANDOFF_FILE")";   [[ -n "$_h_smoke"      ]] && PR_SMOKE_TEST="$_h_smoke"
+  fi
+
   PR_BODY_FILE="$(mktemp)"
   afk::render "$AFK_DIR/templates/pr-body.md" \
     TITLE          "$(afk::tracker::issue_view_json "$ISSUE" | jq -r '.title // ""')" \
     BRANCH         "$BRANCH" \
     ISSUE_ID       "$ISSUE" \
-    SUMMARY        "AFK-implemented per the linked issue's acceptance criteria." \
-    TEST_PLAN      "Unit/integration tests added per the issue's test notes; CI is the source of truth." \
+    SUMMARY        "$PR_SUMMARY" \
+    TEST_PLAN      "$PR_TEST_PLAN" \
+    SMOKE_TEST     "$PR_SMOKE_TEST" \
     REVIEWER_NOTES "Self-review by AFK pr_review phase. Acceptance criteria checked against the diff." \
     > "$PR_BODY_FILE"
 
@@ -276,6 +304,106 @@ if afk::state_phase_completed "$ISSUE" pr_review; then
 else
   run_phase pr-review "PR_NUMBER=$PR_NUMBER" || true   # advisory phase, non-fatal
   afk::state_phase_mark_completed "$ISSUE" pr_review
+fi
+
+# ╔════════════════════════════════════════════════════════════════════════╗
+# ║                  SMOKE GATE — deterministic, pre-merge                  ║
+# ║ Run the implementer's handoff.smoke_cmd in the worktree, post the      ║
+# ║ captured output as evidence on the PR, and refuse to merge on a        ║
+# ║ non-zero exit. No model is in the trust path for "did it pass". The    ║
+# ║ gate is opt-in (config: smoke_gate) and always honours an "N/A" cmd.   ║
+# ╚════════════════════════════════════════════════════════════════════════╝
+
+HANDOFF_FILE="$AFK_LOGS/issue-${ISSUE}-implement-latest/handoff.json"
+SMOKE_CMD=""; SMOKE_PROSE=""; HANDOFF_SUMMARY=""
+if [[ -s "$HANDOFF_FILE" ]] && jq empty "$HANDOFF_FILE" >/dev/null 2>&1; then
+  SMOKE_CMD="$(jq -r '.smoke_cmd  // ""' "$HANDOFF_FILE")"
+  SMOKE_PROSE="$(jq -r '.smoke_test // ""' "$HANDOFF_FILE")"
+  HANDOFF_SUMMARY="$(jq -r '.summary    // ""' "$HANDOFF_FILE")"
+fi
+# Normalize the "not applicable" sentinel (case-insensitive, tolerates "N/A …").
+SMOKE_NA=0
+shopt -s nocasematch
+[[ -z "$SMOKE_CMD" || "$SMOKE_CMD" == n/a* ]] && SMOKE_NA=1
+shopt -u nocasematch
+
+if afk::state_phase_completed "$ISSUE" smoke; then
+  afk::log "skipping smoke gate (already completed)"
+elif [[ "$(afk::config smoke_gate false)" != "true" ]]; then
+  afk::log "smoke_gate disabled in config; relying on CI. PR body carries the documented smoke test."
+  afk::state_phase_mark_completed "$ISSUE" smoke
+else
+  WT="$(afk::worktree_path "$ISSUE")"
+  EVIDENCE_FILE="$(mktemp)"
+  TIP="$(git -C "$WT" rev-parse --short HEAD 2>/dev/null || echo "?")"
+  if (( SMOKE_NA )); then
+    {
+      printf '## Smoke test evidence\n\n'
+      printf -- '- Status: **N/A (skipped)**\n'
+      printf -- '- Reason: %s\n' "${SMOKE_PROSE:-no automated smoke test applicable}"
+      printf -- '- CI is the gate for this change.\n\n'
+      printf '<sub>Recorded by the AFK issue runner before merge.</sub>\n'
+    } > "$EVIDENCE_FILE"
+    afk::tracker::pr_comment "$PR_NUMBER" "$EVIDENCE_FILE" || afk::warn "could not post N/A smoke evidence (continuing)"
+    afk::log "smoke gate: smoke_cmd is N/A; recorded and proceeding."
+    afk::state_phase_mark_completed "$ISSUE" smoke
+  else
+    SMOKE_TIMEOUT="$(afk::config smoke_timeout_seconds 600)"
+    SMOKE_OUT="$(mktemp)"
+    afk::log "smoke gate: running smoke_cmd in $WT (timeout ${SMOKE_TIMEOUT}s)"
+    SMOKE_RC=0
+    if command -v timeout >/dev/null 2>&1; then
+      ( cd "$WT" && timeout "$SMOKE_TIMEOUT" bash -c "$SMOKE_CMD" ) >"$SMOKE_OUT" 2>&1 || SMOKE_RC=$?
+    else
+      ( cd "$WT" && bash -c "$SMOKE_CMD" ) >"$SMOKE_OUT" 2>&1 || SMOKE_RC=$?
+    fi
+    SMOKE_STATUS="PASS"; (( SMOKE_RC != 0 )) && SMOKE_STATUS="FAIL"
+    {
+      printf '## Smoke test evidence\n\n'
+      printf -- '- Status: **%s** (exit %s)\n' "$SMOKE_STATUS" "$SMOKE_RC"
+      printf -- '- Branch tip: `%s`\n' "$TIP"
+      printf -- '- Command:\n\n```sh\n%s\n```\n\n' "$SMOKE_CMD"
+      printf -- '- Output (last 40 lines):\n\n```\n'
+      tail -n 40 "$SMOKE_OUT"
+      printf '\n```\n\n<sub>Run by the AFK issue runner before merge.</sub>\n'
+    } > "$EVIDENCE_FILE"
+    afk::tracker::pr_comment "$PR_NUMBER" "$EVIDENCE_FILE" || afk::warn "could not post smoke evidence (continuing)"
+    rm -f "$SMOKE_OUT"
+    if (( SMOKE_RC != 0 )); then
+      rm -f "$EVIDENCE_FILE"
+      [[ "$(afk::config notify_on_blocked true)" == "true" ]] && afk::notify error "PR #$PR_NUMBER smoke test failed"
+      afk::tracker::issue_add_label "$ISSUE" "$BLOCKED_LBL"
+      afk::die "smoke gate failed (exit $SMOKE_RC) for PR #$PR_NUMBER; not merging"
+    fi
+    afk::log "smoke gate: PASS for PR #$PR_NUMBER"
+    afk::state_phase_mark_completed "$ISSUE" smoke
+  fi
+  rm -f "$EVIDENCE_FILE"
+fi
+
+# ╔════════════════════════════════════════════════════════════════════════╗
+# ║              FINAL ISSUE COMMENT — deterministic wrap-up                ║
+# ║ Posted by the runner (not the model) so every completed issue ends     ║
+# ║ with: what shipped, how to smoke test, the PR reference, and why it     ║
+# ║ will close. Rendered from the handoff + PR data.                        ║
+# ╚════════════════════════════════════════════════════════════════════════╝
+
+if afk::state_phase_completed "$ISSUE" final_comment; then
+  afk::log "skipping final issue comment (already posted)"
+else
+  ISSUE_TITLE_FC="$(afk::tracker::issue_view_json "$ISSUE" | jq -r '.title // ""')"
+  FINAL_FILE="$(mktemp)"
+  {
+    printf '## AFK — done\n\n'
+    printf '**What was done**\n\n%s\n\n' "${HANDOFF_SUMMARY:-Implemented per the linked issue acceptance criteria.}"
+    printf '**How to smoke test**\n\n%s\n\n' "${SMOKE_PROSE:-N/A — no smoke test recorded.}"
+    printf '**PR:** #%s — %s\n\n' "$PR_NUMBER" "$ISSUE_TITLE_FC"
+    printf 'This issue will close automatically: the PR body links `Closes #%s`, so squash-merging the PR closes it.\n' "$ISSUE"
+  } > "$FINAL_FILE"
+  afk::tracker::issue_comment "$ISSUE" "$(cat "$FINAL_FILE")" || afk::warn "could not post final issue comment (continuing)"
+  rm -f "$FINAL_FILE"
+  afk::state_phase_mark_completed "$ISSUE" final_comment
+  afk::log "posted final wrap-up comment on issue #$ISSUE"
 fi
 
 # ╔════════════════════════════════════════════════════════════════════════╗

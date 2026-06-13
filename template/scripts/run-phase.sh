@@ -204,6 +204,7 @@ esac
 case "$PHASE" in
   plan)       afk::payload "$LOG" plan      > "$LOG_DIR/plan.json"     2>/dev/null || true ;;
   decompose)  afk::payload "$LOG" children  > "$LOG_DIR/children.json" 2>/dev/null || true ;;
+  implement)  afk::payload "$LOG" handoff   > "$LOG_DIR/handoff.json"  2>/dev/null || true ;;
   pr)         afk::payload "$LOG" pr        > "$LOG_DIR/pr.json"       2>/dev/null || true ;;
 esac
 

@@ -38,12 +38,14 @@ flowchart TD
 |-----------------|---------------------------------------|----------------------------------------------|--------------------------------------|
 | `decompose`     | `prompts/decompose-prompt.md`         | `<children>[…]</children>` + COMPLETE; BLOCKED | `logs/.../children.json` parsed by `decompose.sh` |
 | `plan`          | `prompts/plan-prompt.md`              | `<plan>{…}</plan>` + COMPLETE; BLOCKED       | `logs/.../plan.json` → `state.branch`, `state.package` |
-| `implement`     | `prompts/implement-prompt.md`         | COMPLETE; NO_CHANGES; BLOCKED                | git commits on `<branch>`            |
+| `implement`     | `prompts/implement-prompt.md`         | `<handoff>{…}</handoff>` + COMPLETE; NO_CHANGES; BLOCKED | git commits + `logs/.../handoff.json` → PR summary/test plan/smoke test |
 | `review`        | `prompts/review-prompt.md`            | COMPLETE; NO_CHANGES; BLOCKED                | git commits on `<branch>`            |
 | `pr`            | `prompts/pr-prompt.md`                | `<pr>{…}</pr>` + COMPLETE; BLOCKED           | `logs/.../pr.json` → `state.pr`      |
 | `pr_wait_ci`    | (no agent — orchestrator polls)       | n/a                                          | none                                 |
 | `pr_review`     | `prompts/pr-review-prompt.md`         | COMPLETE; NO_CHANGES; BLOCKED                | tracker review comment / approval    |
-| `pr_merge`      | `prompts/merge-prompt.md`             | COMPLETE; BLOCKED                            | squash-merge on tracker              |
+| (smoke gate)    | _runner step, no agent_               | n/a (deterministic; BLOCK on non-zero `smoke_cmd`) | runs handoff `smoke_cmd` in worktree → **Smoke test evidence** comment on PR (opt-in via `smoke_gate`) |
+| (final comment) | _runner step, no agent_               | n/a (deterministic)                          | **AFK — done** wrap-up comment on the issue (what shipped, smoke test, PR ref, why it closes) |
+| `pr_merge`      | `prompts/merge-prompt.md`             | COMPLETE; BLOCKED                            | mergeability re-check + squash-merge on tracker |
 | `document`      | `prompts/document-prompt.md`          | COMPLETE; BLOCKED                            | git commits on `afk/docs-prd-<N>-<slug>` |
 
 ### Sentinels in detail

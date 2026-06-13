@@ -111,9 +111,46 @@ phases.
 When you stop (success or partial), post one progress comment on the
 issue via the `afk-tracker-issue` skill — under ~10 lines.
 
+## Handoff (drives the PR body and the merge-time smoke test)
+
+On success you **must** emit one `<handoff>` JSON block. The runner
+captures it: it renders `summary` / `test_plan` / `smoke_test` into the
+PR/MR body, and — when the smoke gate is enabled — **executes your
+`smoke_cmd` itself** in this worktree before merging, attaching the
+output as evidence. Write it for a human reviewer, not for yourself.
+
+```
+<handoff>
+{
+  "summary":    "<2–5 sentences: WHAT changed and WHY, named by package/file. Detailed, not boilerplate.>",
+  "test_plan":  "<the automated tests you added/extended and what they prove; call out any test gaps honestly>",
+  "smoke_test": "<human-readable steps anyone can run from a fresh checkout of this branch to verify the change end-to-end: exact commands + the expected observable output. If a meaningful smoke test is genuinely not applicable (pure docs/refactor with no runtime surface), write exactly: 'N/A — <one-line why>'>",
+  "smoke_cmd":  "<a SINGLE self-contained shell command (chain with && if needed) that the runner can execute non-interactively to verify the change. It MUST exit 0 on success and non-zero on failure. If no automated smoke test is applicable, set this to exactly 'N/A'.>"
+}
+</handoff>
+```
+
+Rules for the smoke fields:
+
+- `smoke_cmd` is the **machine-verifiable** contract: the runner runs it
+  verbatim with `bash -c` from the worktree root and gates the merge on
+  its exit code. `smoke_test` is the human-readable companion.
+- Prefer **real** commands that already exist in this repo (a test
+  target, a CLI invocation, a `curl … && grep`, a script) plus the
+  expected result. Escape newlines as `\n` so the block stays valid JSON.
+- Make `smoke_cmd` self-contained and non-interactive: assume only that
+  the branch is checked out and deps are installed the normal way for
+  this repo. Bake the expected-result assertion into the command itself
+  (e.g. pipe to `grep -q`, `jq -e`, or a test) so a wrong result is a
+  non-zero exit, not just unexpected stdout.
+- Never invent commands or flags that do not exist here. If you cannot
+  write a reliable one-shot check, set `smoke_cmd` to `N/A` and explain
+  in `smoke_test` — do not fabricate a command that will not pass.
+
 ## Finish
 
-- On success: `<promise>COMPLETE</promise>`
+- On success: emit the `<handoff>{…}</handoff>` block, then
+  `<promise>COMPLETE</promise>`.
 - Nothing needed: `<promise>NO_CHANGES</promise>`
 - Blocked: `<promise>BLOCKED</promise>` + one-line reason
 

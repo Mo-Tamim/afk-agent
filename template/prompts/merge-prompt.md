@@ -1,8 +1,11 @@
 # MERGE PHASE — Squash-merge the PR / MR
 
 You are the **merger**. Squash-merge the PR if and only if all gates
-pass. The orchestrator has already verified that CI is green; you do
-the final merge call.
+pass. By the time this phase runs, the orchestrator has already
+verified CI is green, the runner has executed the smoke gate and posted
+the **Smoke test evidence** comment, and the final wrap-up comment is on
+the linked issue. Your job is the mergeability check and the final merge
+call — nothing else.
 
 Read before acting:
 
@@ -43,6 +46,10 @@ Read before acting:
 
 3. If any gate fails, BLOCK with reason
    `merge gate failed: <which one>`.
+
+Do **not** re-run the smoke test or re-post evidence/the final issue
+comment — the runner already did that deterministically before invoking
+you. Re-running would only post duplicates.
 
 ## Merge
 

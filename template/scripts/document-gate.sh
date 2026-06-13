@@ -174,6 +174,7 @@ afk::docs_run_prd() {
       ISSUE_ID       "$PRD" \
       SUMMARY        "AFK-generated developer + user documentation for PRD #$PRD." \
       TEST_PLAN      "Manual: open the new docs and confirm mermaid renders + links resolve." \
+      SMOKE_TEST     "$(printf '1. Open the changed files under \`docs/dev/\` and \`docs/user/\`.\n2. Confirm every mermaid block renders (paste into a mermaid live editor or view on the tracker).\n3. Click each link in the docs index and confirm it resolves.')" \
       REVIEWER_NOTES "Self-review by AFK pr_review phase against the docs PR diff." \
       > "$PR_BODY_FILE"
 

@@ -64,7 +64,10 @@ PRD issue (label: afk-prd, ready-for-agent)
 ## PR / MR rules
 
 - The PR opener phase is the **only** phase allowed to `git push`.
-- The PR body is rendered from `.afk/templates/pr-body.md`.
+- The PR body is rendered from `.afk/templates/pr-body.md`. It always
+  contains, in addition to `Closes #N`: a detailed **Summary**, a
+  **Test plan**, and a **Smoke test** section — all sourced from the
+  `<handoff>` JSON the implement phase emits.
 - The PR title mirrors the child issue title.
 - The PR description always references the child issue with
   `Closes #N` (GitHub) or `Closes #N` (GitLab — same syntax) so
@@ -72,7 +75,21 @@ PRD issue (label: afk-prd, ready-for-agent)
 - Self-review (`pr_review`) is performed by a **fresh agent** with no
   prior context — it pulls the diff via the tracker CLI, not the
   working tree.
-- The merge phase squash-merges and applies `afk-done`.
+- **Smoke gate (deterministic, in the runner — not an agent).** When
+  `smoke_gate: true` in `config.yml`, after CI is green the issue runner
+  executes the implement handoff's `smoke_cmd` in the worktree, posts
+  the captured output as a **Smoke test evidence** comment on the PR,
+  and refuses to merge on a non-zero exit. A `smoke_cmd` of `N/A` is
+  recorded as skipped with CI as the gate. No model is in the trust path
+  for "did the smoke test pass".
+- **Final wrap-up comment (deterministic, in the runner).** Before
+  merging, the runner posts a closing comment on the linked issue —
+  what was done, how to smoke test, the PR reference, and why the issue
+  will close (`Closes #N` auto-closes on merge).
+- The `pr_merge` phase only re-checks mergeability and performs the
+  squash-merge; it does **not** re-run the smoke test or re-post
+  comments (the runner already did). The orchestrator then applies
+  `afk-done`.
 
 ## Sentinels
 
@@ -83,7 +100,7 @@ the end of each phase. The orchestrator never parses prose.
 |-----------------|----------------------------------------------|-------------------------|
 | `decompose`     | `<children>[…]</children>` + COMPLETE        | BLOCKED                 |
 | `plan`          | `<plan>{…}</plan>` + COMPLETE                | BLOCKED                 |
-| `implement`     | COMPLETE                                     | NO_CHANGES, BLOCKED     |
+| `implement`     | `<handoff>{…}</handoff>` + COMPLETE          | NO_CHANGES, BLOCKED     |
 | `review`        | COMPLETE                                     | NO_CHANGES, BLOCKED     |
 | `pr`            | `<pr>{"number":N,"url":"…"}</pr>` + COMPLETE | BLOCKED                 |
 | `pr_wait_ci`    | (handled by orchestrator, no agent sentinel) | —                       |

@@ -22,6 +22,7 @@
 #   afk::tracker::blockers_resolved <N>      # rc=0 iff every blocker is closed
 #   afk::tracker::pr_list_for_branch <branch> # → "<N>" of first open PR or empty
 #   afk::tracker::pr_view_json      <PR>
+#   afk::tracker::pr_comment        <PR> <body-file>   # plain top-level comment (evidence/notes)
 #   afk::tracker::ci_status         <PR>     # GREEN | RED | PENDING | UNKNOWN
 #   afk::tracker::pr_merged_for_issue <N>    # → PR number that closed the issue, or empty
 
@@ -215,6 +216,16 @@ afk::tracker::pr_view_json() {
   case "$TRACKER" in
     github) gh   pr view "$1" -R "$REPO" --json state,mergeable,mergeStateStatus,statusCheckRollup,title,headRefName,baseRefName ;;
     gitlab) glab mr view "$1" -R "$REPO" --output json ;;
+  esac
+}
+
+# Post a plain top-level comment on a PR/MR. Args: <PR> <body-file>.
+# Used by the issue runner to attach smoke-test evidence before merging.
+afk::tracker::pr_comment() {
+  local pr="$1" body_file="$2"
+  case "$TRACKER" in
+    github) gh   pr comment "$pr" -R "$REPO" --body-file "$body_file" >/dev/null ;;
+    gitlab) glab mr note    "$pr" -R "$REPO" --message "$(cat "$body_file")" >/dev/null ;;
   esac
 }
 

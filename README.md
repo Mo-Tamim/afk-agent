@@ -118,6 +118,9 @@ demand when a phase prompt names them — you rarely call those directly.
 - **PRD → child issues → branches → PRs → CI → self-review → squash-merge → docs PR**, all unattended.
 - **Auto-rebase** children onto fresh `origin/main` as siblings merge.
 - **Auto-generated dev + user docs** (with mermaid) once the last child of a PRD closes.
+- **Self-documenting PRs.** The implement phase emits a `<handoff>` with a detailed summary, test plan, and a copy-pasteable **smoke test**, all rendered into the PR body.
+- **Smoke-test evidence at merge.** Before merging, the merge phase re-runs the PR's smoke test in the worktree and posts the captured output as evidence; a failing smoke test blocks the merge.
+- **Final issue wrap-up.** Each issue gets a closing comment (what shipped, how to smoke test, the PR reference, and why it will close) before the squash-merge auto-closes it.
 
 ### Safety & resumability
 

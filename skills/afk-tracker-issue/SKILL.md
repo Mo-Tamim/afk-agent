@@ -107,6 +107,32 @@ EOF
 Keep status comments under ~10 lines. Never paste full diffs into
 issue comments — link to the PR/MR instead.
 
+### 3b. Final wrap-up comment (issue done)
+
+Posted **deterministically by the issue runner** (not an agent) right
+before merging — see `afk::tracker::issue_comment` in `lib/tracker.sh`
+— so every completed issue ends with a human-readable record of what
+shipped. Documented here as the canonical shape; same CLI verb as the
+progress comment (`gh issue comment` / `glab issue note`):
+
+```
+## AFK — done
+
+What was done:
+- <plain-English summary of the change>
+
+How to smoke test:
+- <copy-pasteable steps, or "N/A — <reason>">
+
+PR: #<N> (<title>)
+Why this issue will close: the PR body links `Closes #<ISSUE_ID>`, so
+merging the PR auto-closes this issue.
+```
+
+If the work produced **no** PR (e.g. a `NO_CHANGES` outcome), drop the
+`PR:` line and state plainly that nothing shipped and why. Always
+reference the PR/MR when one exists.
+
 ### 4. Apply / remove labels
 
 GitHub:
